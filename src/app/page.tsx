@@ -105,7 +105,7 @@ export default function HomePage() {
       <header className="bg-white border-b border-border-soft">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🌸</span>
+            <span className="text-xl">🌷</span>
             <span className="font-medium text-text-primary text-sm">ガルちゃん運営ツール</span>
           </div>
           <button

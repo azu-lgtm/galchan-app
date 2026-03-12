@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
 
-const DEFAULT_MODEL = 'gemini-2.0-flash'
+const DEFAULT_MODEL = 'gemini-2.5-flash'
 
 /**
  * ストリーミング呼び出し — ReadableStream<Uint8Array> を返す

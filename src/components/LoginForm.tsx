@@ -43,7 +43,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
     <div className="min-h-screen bg-base flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-4xl mb-3">🌸</div>
+          <div className="text-4xl mb-3">🌷</div>
           <h1 className="text-2xl font-medium text-text-primary">ガルちゃん運営ツール</h1>
           <p className="text-text-secondary text-sm mt-1">40代の失敗回避チャンネル</p>
         </div>

@@ -1,4 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+/** テキストから最初のJSON配列を抽出する */
+function extractJsonArray(text: string): string | null {
+  // コードブロック内のJSONを優先
+  const fenceMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/)
+  if (fenceMatch) return fenceMatch[1]
+
+  // 最初の [ から対応する ] までを抽出
+  const start = text.indexOf('[')
+  if (start === -1) return null
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '[') depth++
+    else if (text[i] === ']') {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
 import { isAuthenticated } from '@/lib/auth'
 import { callGemini } from '@/lib/ai'
 import { getPromptsFromStore } from '@/lib/kv'
@@ -54,23 +74,14 @@ ${competitorText || '（データなし）'}
 ・競合とかぶりすぎない差別化ポイントを意識する
 ・必ず10件生成すること`
 
-    const raw = await callGemini(prompt, 4096, { jsonMode: true })
+    // jsonMode不使用（gemini-2.5-flashは思考モデルのためjsonModeが不安定）
+    const raw = await callGemini(prompt, 4096)
 
-    // JSONを抽出
+    // 堅牢なJSON抽出
     let topics
-    try {
-      // コードブロックを除去
-      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      topics = JSON.parse(cleaned)
-    } catch {
-      // JSON抽出を試みる
-      const match = raw.match(/\[[\s\S]*\]/)
-      if (match) {
-        topics = JSON.parse(match[0])
-      } else {
-        throw new Error('JSONパースに失敗しました')
-      }
-    }
+    const extracted = extractJsonArray(raw)
+    if (!extracted) throw new Error('JSONの抽出に失敗しました。生のレスポンス: ' + raw.slice(0, 200))
+    topics = JSON.parse(extracted)
 
     return NextResponse.json({ topics })
   } catch (err) {
