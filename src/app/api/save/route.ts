@@ -124,6 +124,60 @@ function buildMaterialsJson(
   return JSON.stringify(obj, null, 2)
 }
 
+// ── Obsidian管理ファイル生成（Dataview対応フロントマター）──────────────────────
+function buildObsidianMasterMd(
+  topic: GalTopicCandidate,
+  style: ScriptStyle,
+  script: string,
+  materials: GalMaterials,
+): string {
+  const date = new Date().toISOString().slice(0, 10)
+  const styleLabel = SCRIPT_STYLE_LABELS[style]
+  const serial = materials.serialNumber ?? ''
+
+  const productSection = materials.productList && materials.productList.length > 0
+    ? `\n## 商品リスト\n\n| 商品名 | カテゴリ | Amazonリンク |\n|---|---|---|\n` +
+      materials.productList.map((p) =>
+        `| ${p.name} | ${p.category} | ${p.amazonLink || '（未入力）'} |`
+      ).join('\n') + '\n'
+    : ''
+
+  return `---
+serial: "${serial}"
+date: ${date}
+style: ${styleLabel}
+topic: "${topic.title}"
+titles:
+${materials.titles.map((t) => `  - "${t}"`).join('\n')}
+thumbnails:
+${materials.thumbnails.map((t) => `  - "${t}"`).join('\n')}
+tags: [ガルちゃん, ${styleLabel}]
+status: 下書き
+---
+
+# ${topic.title}
+
+## タイトル案
+${materials.titles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+## サムネ文言
+${materials.thumbnails.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+## 概要欄
+${materials.description}
+
+## タグ
+${materials.metaTags}
+
+## 固定コメント
+${materials.pinComment}
+${productSection}
+## 台本
+
+${script}
+`
+}
+
 // ── メインハンドラ ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   if (!isAuthenticated()) {
@@ -150,20 +204,22 @@ export async function POST(req: NextRequest) {
       csvTsv: scriptToTsv(script),
     }
 
-    // Windows ローカル環境の場合はファイルに書き込む
+    // Windows ローカル環境の場合はObsidianに書き込む
     if (process.platform === 'win32' && process.env.OBSIDIAN_VAULT_PATH) {
       try {
         const { writeFileSync, mkdirSync } = await import('fs')
         const { join } = await import('path')
         const vaultPath = process.env.OBSIDIAN_VAULT_PATH
         const serial = materials.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
+        // タイトルのファイル名に使えない文字を除去
+        const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').slice(0, 40)
         const dir = join(vaultPath, 'ガルちゃん')
 
-        mkdirSync(join(dir, 'ネタ'), { recursive: true })
-        mkdirSync(join(dir, '台本'), { recursive: true })
+        mkdirSync(dir, { recursive: true })
 
-        writeFileSync(join(dir, 'ネタ', `${serial}_${topic.title}.md`), files.ideaMd, 'utf-8')
-        writeFileSync(join(dir, '台本', `${serial}_${topic.title}.txt`), files.scriptTxt, 'utf-8')
+        // 1ファイルに全データをまとめたマスターファイル（Dataview対応）
+        const masterMd = buildObsidianMasterMd(topic, style, script, materials)
+        writeFileSync(join(dir, `${serial}_${safeTitle}.md`), masterMd, 'utf-8')
       } catch (e) {
         console.warn('Obsidian local write skipped:', e)
       }

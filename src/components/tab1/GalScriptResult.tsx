@@ -29,7 +29,9 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   const [materials, setMaterials] = useState<GalMaterials | null>(null)
   const [loadingMaterials, setLoadingMaterials] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savingSheets, setSavingSheets] = useState(false)
   const [savedFiles, setSavedFiles] = useState<SavedFiles | null>(null)
+  const [sheetsSaved, setSheetsSaved] = useState(false)
   const [error, setError] = useState('')
   const [scriptOpen, setScriptOpen] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
@@ -115,6 +117,26 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
 
     const serial = materials?.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
     downloadText(rows, `${serial}_ymm4.tsv`)
+  }
+
+  const handleSaveSheets = async () => {
+    if (!materials) return
+    setSavingSheets(true)
+    setError('')
+    try {
+      const res = await fetch('/api/google/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, style, script, materials }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Sheets保存に失敗しました')
+      setSheetsSaved(true)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setSavingSheets(false)
+    }
   }
 
   const copy = async (text: string, key: string) => {
@@ -305,6 +327,16 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
           📄 TSV出力
         </Button>
       </div>
+
+      <Button
+        variant="secondary"
+        onClick={handleSaveSheets}
+        loading={savingSheets}
+        disabled={!materials || sheetsSaved}
+        className="w-full"
+      >
+        {sheetsSaved ? '✅ Sheetsに保存済み' : '📊 Sheetsに保存（台本・商品リスト・管理シート）'}
+      </Button>
 
       {savedFiles && (
         <Card padding="sm">
