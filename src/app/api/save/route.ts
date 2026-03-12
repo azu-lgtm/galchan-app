@@ -124,7 +124,7 @@ function buildMaterialsJson(
   return JSON.stringify(obj, null, 2)
 }
 
-// ── Obsidian管理ファイル生成（Dataview対応フロントマター）──────────────────────
+// ── Obsidian管理ファイル生成（Dataview対応・動画管理シート列構成に対応）──────
 function buildObsidianMasterMd(
   topic: GalTopicCandidate,
   style: ScriptStyle,
@@ -135,27 +135,40 @@ function buildObsidianMasterMd(
   const styleLabel = SCRIPT_STYLE_LABELS[style]
   const serial = materials.serialNumber ?? ''
 
+  // 商品リストセクション（商品スタイル時のみ）
   const productSection = materials.productList && materials.productList.length > 0
-    ? `\n## 商品リスト\n\n| 商品名 | カテゴリ | Amazonリンク |\n|---|---|---|\n` +
-      materials.productList.map((p) =>
-        `| ${p.name} | ${p.category} | ${p.amazonLink || '（未入力）'} |`
+    ? `\n## 商品リスト\n\n| No. | 商品名 | カテゴリ | 商品リンク |\n|---|---|---|---|\n` +
+      materials.productList.map((p, i) =>
+        `| ${i + 1} | ${p.name} | ${p.category} |  |`
       ).join('\n') + '\n'
     : ''
 
+  // 動画管理シートの列構成に対応したフォーマット
   return `---
 serial: "${serial}"
 date: ${date}
 style: ${styleLabel}
 topic: "${topic.title}"
+angle: "${topic.angle}"
 titles:
 ${materials.titles.map((t) => `  - "${t}"`).join('\n')}
 thumbnails:
 ${materials.thumbnails.map((t) => `  - "${t}"`).join('\n')}
 tags: [ガルちゃん, ${styleLabel}]
 status: 下書き
+spreadsheet_url: ""
 ---
 
 # ${topic.title}
+
+## テーマ
+${topic.title}
+
+## 切り口
+${topic.angle}
+
+## 動画企画の型
+${styleLabel}
 
 ## タイトル案
 ${materials.titles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
@@ -166,12 +179,15 @@ ${materials.thumbnails.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 ## 概要欄
 ${materials.description}
 
-## タグ
+## メタタグ
 ${materials.metaTags}
 
 ## 固定コメント
 ${materials.pinComment}
 ${productSection}
+## 台本リンク
+（Sheetsに保存後にURLをここに入力）
+
 ## 台本
 
 ${script}
@@ -213,7 +229,7 @@ export async function POST(req: NextRequest) {
         const serial = materials.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
         // タイトルのファイル名に使えない文字を除去
         const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').slice(0, 40)
-        const dir = join(vaultPath, 'ガルちゃん')
+        const dir = join(vaultPath, 'ガルネタ')
 
         mkdirSync(dir, { recursive: true })
 

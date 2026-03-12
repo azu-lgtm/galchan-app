@@ -32,6 +32,7 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   const [savingSheets, setSavingSheets] = useState(false)
   const [savedFiles, setSavedFiles] = useState<SavedFiles | null>(null)
   const [sheetsSaved, setSheetsSaved] = useState(false)
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [scriptOpen, setScriptOpen] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
@@ -132,6 +133,7 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Sheets保存に失敗しました')
       setSheetsSaved(true)
+      if (data.spreadsheetUrl) setSheetsUrl(data.spreadsheetUrl)
     } catch (err) {
       setError(String(err))
     } finally {
@@ -335,8 +337,28 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
         disabled={!materials || sheetsSaved}
         className="w-full"
       >
-        {sheetsSaved ? '✅ Sheetsに保存済み' : '📊 Sheetsに保存（台本・商品リスト・管理シート）'}
+        {sheetsSaved ? '✅ 台本スプレッドシートを作成しました' : '📊 Sheetsに保存（台本スプシ作成＋管理シート追記）'}
       </Button>
+
+      {sheetsUrl && (
+        <Card padding="sm">
+          <p className="text-xs text-text-secondary mb-1">台本スプレッドシート</p>
+          <a
+            href={sheetsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-accent hover:text-accent-dark break-all"
+          >
+            {sheetsUrl}
+          </a>
+          <button
+            onClick={() => copy(sheetsUrl, 'sheetsUrl')}
+            className="ml-2 text-xs text-text-secondary hover:text-accent"
+          >
+            {copied === 'sheetsUrl' ? '✓ コピー済み' : 'コピー'}
+          </button>
+        </Card>
+      )}
 
       {savedFiles && (
         <Card padding="sm">
