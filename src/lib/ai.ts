@@ -24,7 +24,7 @@ export function streamGemini(
         const geminiModel = genAI.getGenerativeModel({
           model,
           generationConfig: {
-            maxOutputTokens: Math.min(maxTokens, 8192),
+            maxOutputTokens: Math.min(maxTokens, 65536),
             ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
           },
         })
@@ -53,7 +53,7 @@ export async function callGemini(
   const geminiModel = genAI.getGenerativeModel({
     model,
     generationConfig: {
-      maxOutputTokens: Math.min(maxTokens, 8192),
+      maxOutputTokens: Math.min(maxTokens, 65536),
       ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
     },
   })

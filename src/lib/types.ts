@@ -1,11 +1,20 @@
 // ── Topic ─────────────────────────────────────────────────────────────────────
 
+export type TopicCategory = 'galchan' | 'trends' | 'competitors'
+
 export interface GalTopicCandidate {
   title: string
   description: string
   angle: string          // 切り口
   emotionWords: string[] // 感情ワード（後悔/恥/損失など）
   source?: string        // 参考競合タイトルなど
+  category?: TopicCategory
+}
+
+export interface CategorizedTopics {
+  galchan: GalTopicCandidate[]
+  trends: GalTopicCandidate[]
+  competitors: GalTopicCandidate[]
 }
 
 // ── Script ────────────────────────────────────────────────────────────────────

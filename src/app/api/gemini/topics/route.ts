@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 /** テキストから最初のJSON配列を抽出する */
 function extractJsonArray(text: string): string | null {
-  // コードブロック内のJSONを優先
-  const fenceMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/)
+  // コードブロック内のJSONを優先（greedy で最後の ] まで）
+  const fenceMatch = text.match(/```(?:json)?\s*(\[[\s\S]*\])\s*```/)
   if (fenceMatch) return fenceMatch[1]
 
   // 最初の [ から対応する ] までを抽出
@@ -75,7 +75,7 @@ ${competitorText || '（データなし）'}
 ・必ず10件生成すること`
 
     // jsonMode不使用（gemini-2.5-flashは思考モデルのためjsonModeが不安定）
-    const raw = await callGemini(prompt, 4096)
+    const raw = await callGemini(prompt, 8192)
 
     // 堅牢なJSON抽出
     let topics

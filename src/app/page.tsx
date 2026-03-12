@@ -8,16 +8,14 @@ import GalTopicsView from '@/components/tab1/GalTopicsView'
 import GalScriptResult from '@/components/tab1/GalScriptResult'
 import ChannelDummy from '@/components/tab2/ChannelDummy'
 import SettingsDummy from '@/components/tab3/SettingsDummy'
-import type { GalTopicCandidate, ScriptStyle } from '@/lib/types'
+import type { GalTopicCandidate, CategorizedTopics, ScriptStyle } from '@/lib/types'
 
 type Tab = 'tab1' | 'tab2' | 'tab3'
 type Tab1Screen = 'dashboard' | 'topics' | 'script'
 
 interface Tab1State {
   screen: Tab1Screen
-  topics: GalTopicCandidate[]
-  analyticsText: string
-  competitorText: string
+  topics: CategorizedTopics
   selectedTopic: GalTopicCandidate | null
   selectedStyle: ScriptStyle | null
   script: string
@@ -49,9 +47,7 @@ function saveTab1State(state: Tab1State) {
 
 const defaultTab1State: Tab1State = {
   screen: 'dashboard',
-  topics: [],
-  analyticsText: '',
-  competitorText: '',
+  topics: { galchan: [], trends: [], competitors: [] },
   selectedTopic: null,
   selectedStyle: null,
   script: '',
@@ -66,8 +62,10 @@ export default function HomePage() {
   useEffect(() => {
     checkAuth()
     const restored = loadTab1State()
-    if (restored && (restored.topics.length > 0)) {
-      setTab1(restored)
+    if (restored) {
+      const t = restored.topics
+      const hasTopics = t.galchan.length > 0 || t.trends.length > 0 || t.competitors.length > 0
+      if (hasTopics) setTab1(restored)
     }
     setTab1Initialized(true)
   }, [])
@@ -130,17 +128,11 @@ export default function HomePage() {
           <>
             {tab1.screen === 'dashboard' && (
               <GalDashboard
-                onTopicsReady={(topics, analyticsText, competitorText) =>
-                  setTab1((prev) => ({
-                    ...prev,
-                    topics,
-                    analyticsText,
-                    competitorText,
-                    screen: 'topics',
-                  }))
+                onTopicsReady={(topics) =>
+                  setTab1((prev) => ({ ...prev, topics, screen: 'topics' }))
                 }
                 onResumeTopics={
-                  tab1.topics.length > 0
+                  (tab1.topics.galchan.length > 0 || tab1.topics.trends.length > 0 || tab1.topics.competitors.length > 0)
                     ? () => setTab1((prev) => ({ ...prev, screen: 'topics' }))
                     : undefined
                 }
@@ -150,8 +142,6 @@ export default function HomePage() {
             {tab1.screen === 'topics' && (
               <GalTopicsView
                 topics={tab1.topics}
-                analyticsText={tab1.analyticsText}
-                competitorText={tab1.competitorText}
                 onScriptReady={(script, topic, style) =>
                   setTab1((prev) => ({
                     ...prev,
