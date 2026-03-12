@@ -42,23 +42,37 @@ export function streamGemini(
 }
 
 /**
- * 非ストリーミング呼び出し — テキストを返す
+ * 非ストリーミング呼び出し — テキストを返す（503時は1.5-flashにフォールバック）
  */
 export async function callGemini(
   prompt: string,
   maxTokens: number = 8192,
   options?: { jsonMode?: boolean; model?: string },
 ): Promise<string> {
-  const model = options?.model ?? DEFAULT_MODEL
-  const geminiModel = genAI.getGenerativeModel({
-    model,
-    generationConfig: {
-      maxOutputTokens: Math.min(maxTokens, 65536),
-      ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
-    },
-  })
-  const result = await geminiModel.generateContent(prompt)
-  return result.response.text()
+  const models = [options?.model ?? DEFAULT_MODEL, 'gemini-1.5-flash']
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]
+    try {
+      const geminiModel = genAI.getGenerativeModel({
+        model,
+        generationConfig: {
+          maxOutputTokens: Math.min(maxTokens, 65536),
+          ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
+        },
+      })
+      const result = await geminiModel.generateContent(prompt)
+      return result.response.text()
+    } catch (err) {
+      const isOverload = String(err).includes('503') || String(err).includes('overloaded') || String(err).includes('high demand')
+      if (isOverload && i < models.length - 1) {
+        console.warn(`[ai] ${model} 高負荷 → ${models[i + 1]} にフォールバック`)
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('全モデルで失敗しました')
 }
 
 export const STREAM_HEADERS = {
