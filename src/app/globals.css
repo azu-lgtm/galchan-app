@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-base: #FDF4F6;
+  --color-secondary: #EDD5D9;
+  --color-accent: #B07A85;
+  --color-accent-dark: #8E5C68;
+  --color-text-primary: #3D2B2E;
+  --color-text-secondary: #8E5C68;
+  --color-border-soft: #DBBFC4;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #FDF4F6;
+  color: #3D2B2E;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+}
+
+/* スクロールバー */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #DBBFC4;
+  border-radius: 2px;
+}
