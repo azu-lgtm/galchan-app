@@ -28,6 +28,11 @@ function loadTab1State(): Tab1State | null {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       const parsed = JSON.parse(saved) as Tab1State
+      // 旧フォーマット（topics が配列）は破棄してリセット
+      if (Array.isArray(parsed.topics)) {
+        localStorage.removeItem(STORAGE_KEY)
+        return null
+      }
       return {
         ...parsed,
         script: '',

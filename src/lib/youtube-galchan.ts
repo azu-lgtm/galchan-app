@@ -183,7 +183,8 @@ export async function getCompetitorTopics(): Promise<{ channelName: string; vide
 /** ガルちゃん掲示板スクレイプ: 直近1ヶ月の40代スレッド */
 export async function scrapeGirlsChannel(): Promise<{ title: string; comments: number; url: string }[]> {
   try {
-    const res = await fetch('https://girlschannel.net/topics/search/?q=40%E4%BB%A3', {
+    // date=m で1ヶ月以内に絞る
+    const res = await fetch('https://girlschannel.net/topics/search/?q=40%E4%BB%A3&date=m', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'ja,en;q=0.9',
@@ -195,19 +196,25 @@ export async function scrapeGirlsChannel(): Promise<{ title: string; comments: n
 
     const threads: { title: string; comments: number; url: string }[] = []
 
-    // タイトルとURLを抽出（<a href="/topics/...">タイトル</a>パターン）
-    const re = /href="(\/topics\/\d+\/[^"]*)"[^>]*>\s*([^<]{5,150})\s*<\/a>/g
-    let m
-    const seen = new Set<string>()
-    while ((m = re.exec(html)) !== null) {
-      const url = m[1]
-      const title = m[2].trim()
-      if (seen.has(url) || title.length < 5) continue
-      seen.add(url)
-      threads.push({ title, comments: 0, url: 'https://girlschannel.net' + url })
+    // <li class="flc"><a href="/topics/NNNN/">...</a></li> の構造
+    const liBlocks = html.match(/<li[^>]*class="flc"[\s\S]*?<\/li>/g) ?? []
+
+    for (const block of liBlocks) {
+      const urlMatch = block.match(/href="(\/topics\/\d+\/[^"]*)"/)
+      const titleMatch = block.match(/<p[^>]*class="title"[^>]*>([^<]+)<\/p>/)
+      const commentMatch = block.match(/<span>(\d+)コメント<\/span>/)
+      if (urlMatch && titleMatch) {
+        threads.push({
+          title: titleMatch[1].trim(),
+          comments: commentMatch ? parseInt(commentMatch[1]) : 0,
+          url: 'https://girlschannel.net' + urlMatch[1],
+        })
+      }
     }
 
-    return threads.slice(0, 15)
+    return threads
+      .sort((a, b) => b.comments - a.comments)
+      .slice(0, 15)
   } catch {
     return []
   }
