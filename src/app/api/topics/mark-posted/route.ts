@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
+import { isDropboxAvailable, dropboxDownload, dropboxUpload } from '@/lib/dropbox'
 
 export const runtime = 'nodejs'
 
@@ -7,6 +8,7 @@ function applyPostedStatus(content: string): string {
   return content
     .replace(/^status: 未投稿$/m, 'status: 投稿済み')
     .replace(/\b未投稿\b/g, '投稿済み')
+    .replace(/tags: \[([^\]]*?)未投稿([^\]]*?)\]/g, (_, a, b) => `tags: [${a}投稿済み${b}]`)
 }
 
 export async function POST(req: NextRequest) {
@@ -16,6 +18,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const { filePath, mdContent } = await req.json() as { filePath: string; mdContent?: string }
+
+    // ── Dropboxモード ──────────────────────────────────────────────────────────
+    if (filePath.startsWith('dropbox:') && isDropboxAvailable()) {
+      const relativePath = filePath.replace('dropbox:', '')
+      const content = await dropboxDownload(relativePath)
+      const updated = applyPostedStatus(content)
+      await dropboxUpload(relativePath, updated)
+      return NextResponse.json({ ok: true, dropboxMode: true })
+    }
 
     // ── ダウンロードモード: 更新済みMDをブラウザに返してダウンロードさせる ──
     if (filePath.startsWith('download:') && mdContent) {

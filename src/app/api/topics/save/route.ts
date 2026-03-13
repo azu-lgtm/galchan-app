@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
+import { isDropboxAvailable, dropboxUpload } from '@/lib/dropbox'
 import type { GalTopicCandidate } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -72,6 +73,12 @@ export async function POST(req: NextRequest) {
         fs.writeFileSync(filePath, content, 'utf-8')
         return NextResponse.json({ ok: true, filePath, fileName })
       }
+    }
+
+    // ── Dropbox: Obsidian vaultに直接アップロード ────────────────────────────
+    if (isDropboxAvailable()) {
+      await dropboxUpload(`ネタ候補/${fileName}`, content)
+      return NextResponse.json({ ok: true, dropboxMode: true, filePath: `dropbox:ネタ候補/${fileName}`, fileName })
     }
 
     // ── Vercel等: MDコンテンツをそのまま返す（フロントでダウンロード）───────
