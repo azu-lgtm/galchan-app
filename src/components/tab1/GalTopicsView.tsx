@@ -96,7 +96,7 @@ function TopicCard({
                 : 'border-border-soft bg-base text-text-secondary hover:border-accent/50 hover:text-accent disabled:opacity-50'
             }`}
           >
-            {savedToObsidian ? '✅ 保存済み' : saving ? '保存中...' : '📝 Obsidianに保存'}
+            {savedToObsidian ? '✅ 保存済み' : saving ? '保存中...' : '📝 MDファイルを保存'}
           </button>
         )}
 
@@ -151,15 +151,26 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
       })
       const d = await res.json()
       if (!res.ok) {
-        alert('Obsidian保存失敗: ' + (d.error ?? '不明なエラー'))
+        alert('保存失敗: ' + (d.error ?? '不明なエラー'))
       } else {
-        setSavedIds(prev => new Set(prev).add(id))
-        if (d.filePath) {
+        // Vercel等: ブラウザでMDファイルをダウンロード
+        if (d.downloadMode && d.content && d.fileName) {
+          const blob = new Blob([d.content], { type: 'text/markdown;charset=utf-8' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = d.fileName
+          a.click()
+          URL.revokeObjectURL(url)
+          // filePath はダミー（mark-posted用）
+          setSavedFilePaths(prev => new Map(prev).set(id, `download:${d.fileName}`))
+        } else if (d.filePath) {
           setSavedFilePaths(prev => new Map(prev).set(id, d.filePath))
         }
+        setSavedIds(prev => new Set(prev).add(id))
       }
     } catch (err) {
-      alert('Obsidian保存エラー: ' + String(err))
+      alert('保存エラー: ' + String(err))
     } finally {
       setSavingIds(prev => { const s = new Set(prev); s.delete(id); return s })
     }
@@ -171,15 +182,38 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
     if (!filePath) return
     setMarkingPostedIds(prev => new Set(prev).add(id))
     try {
+      // ダウンロードモードの場合: 保存済みMDを再生成して投稿済みバージョンをDL
+      const body: Record<string, string> = { filePath }
+      if (filePath.startsWith('download:')) {
+        // 現在のトピックから再度MDを生成してもらう
+        const genRes = await fetch('/api/topics/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic }),
+        })
+        const genData = await genRes.json()
+        if (genData.content) body.mdContent = genData.content
+      }
+
       const res = await fetch('/api/topics/mark-posted', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath }),
+        body: JSON.stringify(body),
       })
+      const d = await res.json()
       if (!res.ok) {
-        const d = await res.json()
         alert('投稿済み更新失敗: ' + (d.error ?? '不明なエラー'))
       } else {
+        // ダウンロードモード: 投稿済みMDをDL
+        if (d.downloadMode && d.content && d.fileName) {
+          const blob = new Blob([d.content], { type: 'text/markdown;charset=utf-8' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = d.fileName
+          a.click()
+          URL.revokeObjectURL(url)
+        }
         setPostedIds(prev => new Set(prev).add(id))
       }
     } catch (err) {
@@ -277,7 +311,7 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
             ? `✅ 全件保存済み`
             : bulkSaving
               ? '保存中...'
-              : `📝 全件保存（${totalCount - savedCount}件）`
+              : `📝 全件MDダウンロード（${totalCount - savedCount}件）`
           }
         </button>
       </div>

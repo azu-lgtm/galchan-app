@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
-import { dropboxUpload, dropboxDownload, isDropboxAvailable } from '@/lib/dropbox'
 
 export const runtime = 'nodejs'
 
@@ -16,15 +15,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { filePath } = await req.json() as { filePath: string }
+    const { filePath, mdContent } = await req.json() as { filePath: string; mdContent?: string }
 
-    // ── Dropbox経由（Vercel等）──────────────────────────────────────────────
-    if (isDropboxAvailable() && filePath.startsWith('dropbox:')) {
-      const relativePath = filePath.replace('dropbox:', '')
-      const current = await dropboxDownload(relativePath)
-      const updated = applyPostedStatus(current)
-      await dropboxUpload(relativePath, updated)
-      return NextResponse.json({ ok: true })
+    // ── ダウンロードモード: 更新済みMDをブラウザに返してダウンロードさせる ──
+    if (filePath.startsWith('download:') && mdContent) {
+      const updated = applyPostedStatus(mdContent)
+      const fileName = filePath.replace('download:', '')
+      return NextResponse.json({ ok: true, downloadMode: true, content: updated, fileName })
     }
 
     // ── ローカルWindows ──────────────────────────────────────────────────────
@@ -38,10 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    return NextResponse.json(
-      { error: 'この操作には DROPBOX_APP_KEY / DROPBOX_REFRESH_TOKEN の設定が必要です' },
-      { status: 503 }
-    )
+    return NextResponse.json({ ok: true, skipped: true })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: 'ファイル更新エラー: ' + msg }, { status: 500 })
