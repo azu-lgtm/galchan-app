@@ -82,6 +82,15 @@ export async function dropboxDownload(relativePath: string): Promise<string> {
   return await res.text()
 }
 
+/** ファイルをDropboxから安全にダウンロード（ファイル未存在時は空文字を返す） */
+export async function dropboxDownloadSafe(relativePath: string): Promise<string> {
+  try {
+    return await dropboxDownload(relativePath)
+  } catch {
+    return ''
+  }
+}
+
 /** Dropboxが利用可能か確認 */
 export function isDropboxAvailable(): boolean {
   return !!(process.env.DROPBOX_APP_KEY && process.env.DROPBOX_REFRESH_TOKEN)

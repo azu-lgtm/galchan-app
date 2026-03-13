@@ -182,10 +182,10 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
     if (!filePath) return
     setMarkingPostedIds(prev => new Set(prev).add(id))
     try {
-      // ダウンロードモードの場合: 保存済みMDを再生成して投稿済みバージョンをDL
-      const body: Record<string, string> = { filePath }
+      const body: Record<string, string> = { filePath, topicTitle: topic.title }
+
+      // ダウンロードモード（フォールバック）: 個別MDを再生成して投稿済みバージョンをDL
       if (filePath.startsWith('download:')) {
-        // 現在のトピックから再度MDを生成してもらう
         const genRes = await fetch('/api/topics/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

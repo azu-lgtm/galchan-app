@@ -4,6 +4,16 @@ import { isDropboxAvailable, dropboxDownload, dropboxUpload } from '@/lib/dropbo
 
 export const runtime = 'nodejs'
 
+/** チェックリスト行を投稿済みに変更 */
+function markLineAsPosted(content: string, topicTitle: string): string {
+  const escaped = topicTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return content.replace(
+    new RegExp(`^- \\[ \\] \\*\\*${escaped}\\*\\*`, 'm'),
+    `- [x] **${topicTitle}**`
+  )
+}
+
+/** レガシー個別MDのstatus書き換え */
 function applyPostedStatus(content: string): string {
   return content
     .replace(/^status: 未投稿$/m, 'status: 投稿済み')
@@ -17,33 +27,39 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { filePath, mdContent } = await req.json() as { filePath: string; mdContent?: string }
+    const { filePath, topicTitle, mdContent } = await req.json() as {
+      filePath: string
+      topicTitle?: string
+      mdContent?: string
+    }
 
-    // ── Dropboxモード ──────────────────────────────────────────────────────────
+    // ── Dropboxモード（共有ファイル） ──────────────────────────────────────────
     if (filePath.startsWith('dropbox:') && isDropboxAvailable()) {
       const relativePath = filePath.replace('dropbox:', '')
       const content = await dropboxDownload(relativePath)
-      const updated = applyPostedStatus(content)
+      const updated = topicTitle ? markLineAsPosted(content, topicTitle) : applyPostedStatus(content)
       await dropboxUpload(relativePath, updated)
       return NextResponse.json({ ok: true, dropboxMode: true })
     }
 
-    // ── ダウンロードモード: 更新済みMDをブラウザに返してダウンロードさせる ──
+    // ── ローカルWindows（共有ファイル） ─────────────────────────────────────
+    if (filePath.startsWith('local:') && process.platform === 'win32') {
+      const realPath = filePath.replace('local:', '')
+      const fs = await import('fs')
+      if (!fs.existsSync(realPath)) {
+        return NextResponse.json({ error: 'ファイルが見つかりません: ' + realPath }, { status: 404 })
+      }
+      const content = fs.readFileSync(realPath, 'utf-8')
+      const updated = topicTitle ? markLineAsPosted(content, topicTitle) : applyPostedStatus(content)
+      fs.writeFileSync(realPath, updated, 'utf-8')
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── ダウンロードモード（フォールバック個別MD） ────────────────────────────
     if (filePath.startsWith('download:') && mdContent) {
       const updated = applyPostedStatus(mdContent)
       const fileName = filePath.replace('download:', '')
       return NextResponse.json({ ok: true, downloadMode: true, content: updated, fileName })
-    }
-
-    // ── ローカルWindows ──────────────────────────────────────────────────────
-    if (process.platform === 'win32') {
-      const fs = await import('fs')
-      if (!fs.existsSync(filePath)) {
-        return NextResponse.json({ error: 'ファイルが見つかりません: ' + filePath }, { status: 404 })
-      }
-      const content = fs.readFileSync(filePath, 'utf-8')
-      fs.writeFileSync(filePath, applyPostedStatus(content), 'utf-8')
-      return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ ok: true, skipped: true })
