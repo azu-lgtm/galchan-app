@@ -3,9 +3,9 @@
  * ファイルのアップロード・ダウンロード・更新
  */
 
-const APP_KEY    = process.env.DROPBOX_APP_KEY!
-const APP_SECRET = process.env.DROPBOX_APP_SECRET!
-const DROPBOX_VAULT_PATH = process.env.DROPBOX_VAULT_PATH ?? '/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる'
+const APP_KEY    = (process.env.DROPBOX_APP_KEY ?? '').trim()
+const APP_SECRET = (process.env.DROPBOX_APP_SECRET ?? '').trim()
+const DROPBOX_VAULT_PATH = (process.env.DROPBOX_VAULT_PATH ?? '/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる').trim()
 
 async function getAccessToken(): Promise<string> {
   const refreshToken = process.env.DROPBOX_REFRESH_TOKEN
