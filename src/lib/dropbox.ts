@@ -7,6 +7,13 @@ const APP_KEY    = (process.env.DROPBOX_APP_KEY ?? '').trim()
 const APP_SECRET = (process.env.DROPBOX_APP_SECRET ?? '').trim()
 const DROPBOX_VAULT_PATH = (process.env.DROPBOX_VAULT_PATH ?? '/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる').trim()
 
+/** Dropbox-API-Arg ヘッダー用: 非ASCII文字を \uXXXX エスケープ */
+function toDropboxApiArg(obj: object): string {
+  return JSON.stringify(obj).replace(/[\u0080-\uFFFF]/g, (ch) =>
+    '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0')
+  )
+}
+
 async function getAccessToken(): Promise<string> {
   const refreshToken = process.env.DROPBOX_REFRESH_TOKEN
   if (!refreshToken) throw new Error('DROPBOX_REFRESH_TOKEN が未設定です')
@@ -38,7 +45,7 @@ export async function dropboxUpload(relativePath: string, content: string): Prom
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({
+      'Dropbox-API-Arg': toDropboxApiArg({
         path: dropboxPath,
         mode: 'overwrite',
         autorename: false,
@@ -64,7 +71,7 @@ export async function dropboxDownload(relativePath: string): Promise<string> {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Dropbox-API-Arg': JSON.stringify({ path: dropboxPath }),
+      'Dropbox-API-Arg': toDropboxApiArg({ path: dropboxPath }),
     },
   })
 
