@@ -9,33 +9,43 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
 import type { GalTopicCandidate, ScriptStyle, GalMaterials, SavedFiles } from '@/lib/types'
 import { SCRIPT_STYLE_LABELS } from '@/lib/types'
+import { uploadTsvToDrive } from '@/lib/google'
 
 export const runtime = 'nodejs'
 
-// ── SE マッピング ──────────────────────────────────────────────────────────────
-const SE_MAP: Record<string, string> = {
-  ナレーション: '',
-  タイトル: 'se_title',
-  イッチ: 'se_main',
-  スレ民1: 'se_reply',
-  スレ民2: 'se_reply',
-  スレ民3: 'se_reply',
-  スレ民4: 'se_reply',
-  スレ民5: 'se_reply',
-  スレ民6: 'se_reply',
-}
+// ── SE除外話者（ナレーション・タイトルはSE不要）────────────────────────────
+const NO_SE_SPEAKERS = new Set(['ナレーション', 'タイトル'])
+const SE_INTERVAL = 10 // 8〜12発言ごとに1回（中央値10を使用）
 
-// ── TSV生成 ───────────────────────────────────────────────────────────────────
+// ── TSV用SE列生成 ─────────────────────────────────────────────────────────────
+/**
+ * 台本テキストを4列TSVに変換する
+ * 列構成: 話者 / 本文 / 空欄 / SE
+ * SEルール: ナレーション・タイトル以外の発言を10件ごとにSE1→SE2交互で挿入
+ */
 function scriptToTsv(script: string): string {
   const lines = script.split('\n').filter((l) => l.trim())
   const rows: string[] = []
+
+  let utteranceCount = 0  // SE対象発言カウンター
+  let seIndex = 0          // 0=SE1, 1=SE2
 
   for (const line of lines) {
     const match = line.match(/^【(.+?)】(.+)$/)
     if (!match) continue
     const speaker = match[1].trim()
     const text = match[2].trim()
-    const se = SE_MAP[speaker] ?? ''
+
+    let se = ''
+    if (!NO_SE_SPEAKERS.has(speaker)) {
+      utteranceCount++
+      if (utteranceCount >= SE_INTERVAL) {
+        se = seIndex % 2 === 0 ? 'SE1' : 'SE2'
+        seIndex++
+        utteranceCount = 0
+      }
+    }
+
     rows.push(`${speaker}\t${text}\t\t${se}`)
   }
 
@@ -213,11 +223,19 @@ export async function POST(req: NextRequest) {
       materials: GalMaterials
     } = await req.json()
 
+    // TSVファイル名: 【自ガルN台本】タイトル_YYYYMMDD.tsv
+    const serial = materials.serialNumber ?? '【自ガル0】'
+    const scriptName = serial.replace('】', '台本】') // 【自ガル1台本】
+    const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').trim().slice(0, 40)
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const tsvFilename = `${scriptName}${safeTitle}_${dateStr}.tsv`
+
     const files: SavedFiles = {
       ideaMd: buildIdeaMd(topic, style, materials.serialNumber),
       scriptTxt: buildScriptTxt(script, topic, style, materials),
       materialsJson: buildMaterialsJson(topic, style, materials),
       csvTsv: scriptToTsv(script),
+      tsvFilename,
     }
 
     // Windows ローカル環境の場合はObsidianに書き込む
@@ -226,22 +244,36 @@ export async function POST(req: NextRequest) {
         const { writeFileSync, mkdirSync } = await import('fs')
         const { join } = await import('path')
         const vaultPath = process.env.OBSIDIAN_VAULT_PATH
-        const serial = materials.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
-        // タイトルのファイル名に使えない文字を除去
-        const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').slice(0, 40)
-        const dir = join(vaultPath, 'ガルネタ')
+        const cleanSerial = serial.replace(/[【】]/g, '')
 
-        mkdirSync(dir, { recursive: true })
-
-        // 1ファイルに全データをまとめたマスターファイル（Dataview対応）
+        // ① ガルネタフォルダ: マスターファイル（Dataview対応・全情報入り）
+        const netatDir = join(vaultPath, 'ガルネタ')
+        mkdirSync(netatDir, { recursive: true })
         const masterMd = buildObsidianMasterMd(topic, style, script, materials)
-        writeFileSync(join(dir, `${serial}_${safeTitle}.md`), masterMd, 'utf-8')
+        writeFileSync(join(netatDir, `${cleanSerial}_${safeTitle}.md`), masterMd, 'utf-8')
+
+        // ② 台本フォルダ: 台本テキストのみ（YMM4作業用・見やすい）
+        const scriptDir = join(vaultPath, '台本')
+        mkdirSync(scriptDir, { recursive: true })
+        const scriptFilename = tsvFilename.replace(/\.tsv$/, '.md')
+        writeFileSync(join(scriptDir, scriptFilename), files.scriptTxt, 'utf-8')
       } catch (e) {
         console.warn('Obsidian local write skipped:', e)
       }
     }
 
-    return NextResponse.json({ success: true, files })
+    // Google Drive へ TSV をアップロード（FOLDER_ID_GALCHAN が設定されている場合）
+    let driveUrl: string | null = null
+    if (process.env.FOLDER_ID_GALCHAN) {
+      try {
+        const { url } = await uploadTsvToDrive(tsvFilename, files.csvTsv)
+        driveUrl = url
+      } catch (e) {
+        console.warn('Drive TSV upload skipped:', e)
+      }
+    }
+
+    return NextResponse.json({ success: true, files, driveUrl })
   } catch (err) {
     console.error('save error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

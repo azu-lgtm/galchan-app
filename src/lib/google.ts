@@ -55,28 +55,44 @@ export async function copyScriptTemplate(
 // ── 台本シートにスクリプトデータを書き込む ────────────────────────────────────
 /**
  * コピーしたスプレッドシートの「台本」シートにデータを書き込む
- * テンプレートのサンプル行（row4以降）をクリアして上書き
+ * 列構成: A=文字数, B=話者, C=本文, D=SE挿入箇所
+ * SEルール: ナレーション・タイトル以外の発言を10件ごとにSE1→SE2交互で挿入
  */
 export async function fillScriptSheet(spreadsheetId: string, script: string): Promise<void> {
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // 台本を行ごとに解析（【話者名】テキスト 形式）
+  const NO_SE_SPEAKERS = new Set(['ナレーション', 'タイトル'])
+  const SE_INTERVAL = 10
+  let utteranceCount = 0
+  let seIndex = 0
+
   const lines = script.split('\n').filter(l => l.trim())
   const rows: (string | number)[][] = []
 
   for (const line of lines) {
     const m = line.match(/^【(.+?)】(.*)$/)
     if (!m) continue
-    const speaker = m[1].trim()
+    const speaker = m[1].trim() || 'ナレーション'
     const text = m[2].trim()
-    rows.push([speaker, text, text.length])
+
+    let se = ''
+    if (!NO_SE_SPEAKERS.has(speaker)) {
+      utteranceCount++
+      if (utteranceCount >= SE_INTERVAL) {
+        se = seIndex % 2 === 0 ? 'SE1' : 'SE2'
+        seIndex++
+        utteranceCount = 0
+      }
+    }
+
+    rows.push([text.length, speaker, text, se])
   }
 
   // row4以降のテンプレートデータをクリア
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: '台本!A4:C1000',
+    range: '台本!A4:D1000',
   })
 
   if (rows.length > 0) {
@@ -156,6 +172,39 @@ export async function appendToManagementSheet(row: (string | null)[]): Promise<v
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
   })
+}
+
+// ── Google Drive へ TSV をアップロード ─────────────────────────────────────────
+/**
+ * TSVファイルを FOLDER_ID_GALCHAN にアップロードする
+ * ローカルツールがこのフォルダを監視してymmp生成を自動実行する
+ */
+export async function uploadTsvToDrive(
+  filename: string,
+  content: string,
+): Promise<{ id: string; url: string }> {
+  const auth = getAuth()
+  const drive = google.drive({ version: 'v3', auth })
+  const folderId = process.env.FOLDER_ID_GALCHAN
+
+  if (!folderId) throw new Error('FOLDER_ID_GALCHAN が未設定です')
+
+  const { Readable } = await import('stream')
+  const body = Readable.from([Buffer.from('\uFEFF' + content, 'utf-8')]) // BOM付きUTF-8
+
+  const res = await drive.files.create({
+    requestBody: {
+      name: filename,
+      parents: [folderId],
+    },
+    media: {
+      mimeType: 'text/tab-separated-values',
+      body,
+    },
+    fields: 'id,webViewLink',
+  })
+
+  return { id: res.data.id!, url: res.data.webViewLink! }
 }
 
 // ── 動画管理シート用の行を組み立てる ──────────────────────────────────────────

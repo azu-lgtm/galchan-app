@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     // 採番取得
     const serialNum = await getNextSerialNumber()
-    const serialLabel = `【外ガル${serialNum}】`
+    const serialLabel = `【自ガル${serialNum}】`
 
     const prompt = `${mp.common}
 

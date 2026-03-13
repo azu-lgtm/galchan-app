@@ -33,6 +33,7 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   const [savedFiles, setSavedFiles] = useState<SavedFiles | null>(null)
   const [sheetsSaved, setSheetsSaved] = useState(false)
   const [sheetsUrl, setSheetsUrl] = useState<string | null>(null)
+  const [driveUrl, setDriveUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [scriptOpen, setScriptOpen] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
@@ -79,15 +80,16 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
         const data = await res.json()
         throw new Error(data.error || '保存に失敗しました')
       }
-      const { files } = await res.json()
+      const { files, driveUrl: dUrl } = await res.json()
       setSavedFiles(files)
+      if (dUrl) setDriveUrl(dUrl)
 
-      // ブラウザからダウンロード
+      // ブラウザからダウンロード（TSVは正式ファイル名で）
       const serial = materials.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
       downloadText(files.ideaMd, `${serial}_idea.md`)
       downloadText(files.scriptTxt, `${serial}_script.txt`)
       downloadText(files.materialsJson, `${serial}_materials.json`, 'application/json')
-      downloadText(files.csvTsv, `${serial}_ymm4.tsv`)
+      downloadText(files.csvTsv, files.tsvFilename)
     } catch (err) {
       setError(String(err))
     } finally {
@@ -96,28 +98,39 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   }
 
   const handleCsvOnly = () => {
-    // script から直接TSV生成
+    // script から直接TSV生成（SE1/SE2交互ロジック）
+    const NO_SE = new Set(['ナレーション', 'タイトル'])
+    const SE_INTERVAL = 10
+    let utteranceCount = 0
+    let seIndex = 0
+
     const lines = script.split('\n').filter((l) => l.trim())
-    const SE_MAP: Record<string, string> = {
-      ナレーション: '',
-      タイトル: 'se_title',
-      イッチ: 'se_main',
-      スレ民1: 'se_reply', スレ民2: 'se_reply', スレ民3: 'se_reply',
-      スレ民4: 'se_reply', スレ民5: 'se_reply', スレ民6: 'se_reply',
-    }
     const rows = lines
       .map((line) => {
         const m = line.match(/^【(.+?)】(.+)$/)
         if (!m) return null
         const speaker = m[1].trim()
         const text = m[2].trim()
-        return `${speaker}\t${text}\t\t${SE_MAP[speaker] ?? ''}`
+        let se = ''
+        if (!NO_SE.has(speaker)) {
+          utteranceCount++
+          if (utteranceCount >= SE_INTERVAL) {
+            se = seIndex % 2 === 0 ? 'SE1' : 'SE2'
+            seIndex++
+            utteranceCount = 0
+          }
+        }
+        return `${speaker}\t${text}\t\t${se}`
       })
       .filter(Boolean)
       .join('\n')
 
-    const serial = materials?.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
-    downloadText(rows, `${serial}_ymm4.tsv`)
+    // ファイル名: 【自ガルN台本】タイトル_YYYYMMDD.tsv
+    const serial = materials?.serialNumber ?? '【自ガル0】'
+    const scriptName = serial.replace('】', '台本】')
+    const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').trim().slice(0, 40)
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    downloadText(rows, `${scriptName}${safeTitle}_${dateStr}.tsv`)
   }
 
   const handleSaveSheets = async () => {
@@ -363,8 +376,21 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
       {savedFiles && (
         <Card padding="sm">
           <p className="text-xs text-text-secondary text-center">
-            4ファイルをダウンロードしました（idea.md / script.txt / materials.json / ymm4.tsv）
+            4ファイルをダウンロードしました（idea.md / script.txt / materials.json / tsv）
           </p>
+          {driveUrl && (
+            <div className="mt-2 text-center">
+              <p className="text-xs text-text-secondary mb-1">☁️ DriveにTSVをアップロード済み</p>
+              <a
+                href={driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:text-accent-dark break-all"
+              >
+                {driveUrl}
+              </a>
+            </div>
+          )}
         </Card>
       )}
 

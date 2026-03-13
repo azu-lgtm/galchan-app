@@ -54,10 +54,11 @@ export interface GalMaterials {
 // ── Save Files ────────────────────────────────────────────────────────────────
 
 export interface SavedFiles {
-  ideaMd: string      // idea.md (Obsidian ネタ保存)
-  scriptTxt: string   // script.txt (Obsidian 台本保存)
+  ideaMd: string        // idea.md (Obsidian ネタ保存)
+  scriptTxt: string     // script.txt (Obsidian 台本保存)
   materialsJson: string // materials.json (スプシ・動画管理)
-  csvTsv: string      // csv.tsv (YMM4連携)
+  csvTsv: string        // csv.tsv (YMM4連携)
+  tsvFilename: string   // TSVファイル名 【自ガルN台本】タイトル_YYYYMMDD.tsv
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
