@@ -36,18 +36,18 @@ export async function GET() {
       getCompetitorTopics(),
     ])
 
-    // Geminiに3枠分のデータを渡してネタ生成
+    // Geminiに3枠分のデータを渡してネタ生成（URLも含める）
     const galchanSection = galchanThreads.length > 0
-      ? galchanThreads.map(t => `・${t.title}`).join('\n')
+      ? galchanThreads.map(t => `・${t.title} [URL:${t.url}]`).join('\n')
       : '（データ取得できませんでした）'
 
     const trendsSection = trendVideos.length > 0
-      ? trendVideos.map(v => `・${v.title}（${parseInt(v.viewCount).toLocaleString()}再生）`).join('\n')
+      ? trendVideos.map(v => `・${v.title}（${parseInt(v.viewCount).toLocaleString()}再生）[URL:https://youtube.com/watch?v=${v.id}]`).join('\n')
       : '（データなし）'
 
     const competitorSection = competitorData.length > 0
       ? competitorData.map(ch =>
-          `【${ch.channelName}】\n` + ch.videos.map(v => `  ・${v.title}（${parseInt(v.viewCount).toLocaleString()}再生）`).join('\n')
+          `【${ch.channelName}】\n` + ch.videos.map(v => `  ・${v.title}（${parseInt(v.viewCount).toLocaleString()}再生）[URL:https://youtube.com/watch?v=${v.id}]`).join('\n')
         ).join('\n')
       : '（データなし）'
 
@@ -86,11 +86,12 @@ ${competitorSection}
       "angle": "切り口（どんな角度で見せるか）",
       "emotionWords": ["感情ワード1", "感情ワード2"],
       "source": "参考にしたスレッドタイトルや気づき",
+      "sourceUrl": "最も参考にしたソースの[URL:...]をそのまま入れる",
       "topicCategory": "商品 / 習慣 / 美容 / 健康 / ライフスタイル / お金・節約 / 人間関係 のいずれか"
     }
   ],
-  "trends": [ /* 同じ形式で5件（topicCategory不要）*/ ],
-  "competitors": [ /* 同じ形式で5件（topicCategory不要）*/ ]
+  "trends": [ /* 同じ形式で5件。sourceUrlは参考にしたYouTubeのURL */ ],
+  "competitors": [ /* 同じ形式で5件。sourceUrlは参考にした競合動画のURL */ ]
 }
 \`\`\`
 
@@ -99,7 +100,8 @@ ${competitorSection}
 ・後悔回避・損失回避・恥回避の心理を突いた切り口
 ・各枠必ず5件生成すること
 ・ガルちゃん枠は「商品 / 習慣 / 美容 / 健康 / ライフスタイル / お金・節約 / 人間関係」の7カテゴリに限定すること（婚活・離婚・恋愛・育児・政治など上記7つ以外のテーマは除外）
-・category フィールドには上記7カテゴリのいずれかを日本語で入れること`
+・category フィールドには上記7カテゴリのいずれかを日本語で入れること
+・sourceUrl は必ず上記データに含まれるURLから選ぶこと（存在しない場合は空文字""）`
 
     const raw = await callGemini(prompt, 16384)
     const extracted = extractJsonObject(raw)

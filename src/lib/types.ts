@@ -8,6 +8,7 @@ export interface GalTopicCandidate {
   angle: string          // 切り口
   emotionWords: string[] // 感情ワード（後悔/恥/損失など）
   source?: string        // 参考競合タイトルなど
+  sourceUrl?: string     // ネタ元URL（ガルちゃんスレッド or YouTube動画）
   category?: TopicCategory
 }
 

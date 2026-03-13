@@ -48,12 +48,14 @@ export async function POST(req: NextRequest) {
 
     const filePath = path.join(dir, fileName)
 
+    const sourceUrlLine = topic.sourceUrl ? `\nsourceUrl: "${topic.sourceUrl}"` : ''
+
     const content = `---
 date: ${date}
 category: ${categoryLabel}
 status: 未投稿
 topic: "${topic.title.replace(/"/g, '\\"')}"
-angle: "${topic.angle.replace(/"/g, '\\"')}"
+angle: "${topic.angle.replace(/"/g, '\\"')}"${sourceUrlLine}
 tags: [ガルちゃん, ${categoryLabel}, 未投稿]
 ---
 
@@ -67,7 +69,8 @@ ${topic.angle}
 
 ## 感情ワード
 ${topic.emotionWords.map(w => `- ${w}`).join('\n')}
-${topic.source ? `\n## 参考\n${topic.source}` : ''}
+${topic.source ? `\n## 参考元\n${topic.source}` : ''}
+${topic.sourceUrl ? `\n## ネタ元リンク\n${topic.sourceUrl}` : ''}
 
 ---
 *保存日: ${date}*
