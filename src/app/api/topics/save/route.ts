@@ -10,7 +10,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   competitors: '競合ネタ',
 }
 
-export function buildTopicMd(topic: GalTopicCandidate): { fileName: string; content: string } {
+function buildTopicMd(topic: GalTopicCandidate): { fileName: string; content: string } {
   const date = new Date().toISOString().slice(0, 10)
   const category = topic.category ?? 'galchan'
   const categoryLabel = CATEGORY_LABEL[category] ?? category
