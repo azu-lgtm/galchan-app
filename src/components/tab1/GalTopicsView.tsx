@@ -96,7 +96,7 @@ function TopicCard({
                 : 'border-border-soft bg-base text-text-secondary hover:border-accent/50 hover:text-accent disabled:opacity-50'
             }`}
           >
-            {savedToObsidian ? '✅ 保存済み' : saving ? '保存中...' : '📝 MDファイルを保存'}
+            {savedToObsidian ? '✅ 保存済み' : saving ? '保存中...' : '📝 Obsidianに保存'}
           </button>
         )}
 
@@ -311,7 +311,7 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
             ? `✅ 全件保存済み`
             : bulkSaving
               ? '保存中...'
-              : `📝 全件MDダウンロード（${totalCount - savedCount}件）`
+              : `📝 全件Obsidian保存（${totalCount - savedCount}件）`
           }
         </button>
       </div>
