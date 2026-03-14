@@ -288,6 +288,79 @@ def gemini_generate_image_keywords(rows: list, api_key: str) -> list:
     return keywords[:len(rows)]
 
 
+# ── イラストAC リンク集 HTML 生成 ────────────────────────────────────────────
+
+def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -> None:
+    """
+    セリフ × キーワード一覧 HTML を生成する。
+    いらすとや / イラストAC の検索リンクをワンクリックで開けるようにする。
+    """
+    # 重複キーワードを除去（順序保持）
+    seen = {}
+    for i, (_, _, speaker, text) in enumerate(voice_records):
+        kw = keywords[i]
+        if kw not in seen:
+            seen[kw] = {"speaker": speaker, "text": text[:30], "lines": 1}
+        else:
+            seen[kw]["lines"] += 1
+
+    rows_html = ""
+    for idx, (kw, info) in enumerate(seen.items(), 1):
+        ira_url = f"https://www.irasutoya.com/search?q={urllib.parse.quote(kw)}"
+        ac_url  = f"https://www.ac-illust.com/main/search_result.php?q={urllib.parse.quote(kw)}"
+        ellipsis = "…" if len(info["text"]) == 30 else ""
+        rows_html += (
+            f'<tr>'
+            f'<td class="num">{idx}</td>'
+            f'<td class="kw">{kw}</td>'
+            f'<td class="sp">{info["speaker"]}</td>'
+            f'<td class="tx">{info["text"]}{ellipsis}</td>'
+            f'<td><a href="{ira_url}" target="_blank">いらすとや 🔍</a></td>'
+            f'<td><a href="{ac_url}" target="_blank">イラストAC 🔍</a></td>'
+            f'</tr>\n'
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>画像キーワードリスト</title>
+<style>
+  body {{ font-family: sans-serif; padding: 20px; background: #f8f5f0; }}
+  h1 {{ font-size: 18px; color: #3D3530; }}
+  p.note {{ color: #666; font-size: 13px; margin-bottom: 16px; }}
+  table {{ border-collapse: collapse; width: 100%; }}
+  th {{ background: #8C7B6E; color: white; padding: 8px 12px; text-align: left; }}
+  td {{ padding: 7px 12px; border-bottom: 1px solid #ddd; font-size: 14px; }}
+  tr:hover td {{ background: #f0ebe5; }}
+  .num {{ width: 40px; color: #999; }}
+  .kw {{ font-weight: bold; color: #3D3530; width: 100px; }}
+  .sp {{ color: #8C7B6E; width: 90px; }}
+  .tx {{ color: #555; }}
+  a {{ color: #2563eb; text-decoration: none; white-space: nowrap; }}
+  a:hover {{ text-decoration: underline; }}
+</style>
+</head>
+<body>
+<h1>🖼 画像キーワードリスト（イラストAC / いらすとや）</h1>
+<p class="note">
+  ダウンロードした画像は <code>使用画像/</code> フォルダに保存してください。<br>
+  いらすとや はすでに自動挿入済み。イラストAC は手動でダウンロード → YMM4 で差し替え。
+</p>
+<table>
+<tr>
+  <th>#</th><th>キーワード</th><th>話者</th><th>セリフ（冒頭）</th>
+  <th>いらすとや</th><th>イラストAC</th>
+</tr>
+{rows_html}
+</table>
+</body>
+</html>"""
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+
 # ── いらすとや スクレイピング ─────────────────────────────────────────────────
 
 _IRASUTOYA_HEADERS = {
@@ -588,6 +661,11 @@ def process_tsv(tsv_path: str) -> None:
             images_dir = os.path.join(out_folder, config["image_folder_name"])
             os.makedirs(images_dir, exist_ok=True)
 
+            # イラストAC リンク集 HTML を生成（キーワード確定後すぐ）
+            ac_html_path = os.path.join(out_folder, "イラストACリンク集.html")
+            generate_ac_links_html(voice_records, keywords, ac_html_path)
+            print(f"  リンク集生成: {ac_html_path}")
+
             img_cache = {}  # keyword → local path (None = DL失敗)
             max_images = config.get("image_max", 20)
             dl_count = 0   # ダウンロード済み枚数（キャッシュ除く）
@@ -633,6 +711,9 @@ def process_tsv(tsv_path: str) -> None:
     print(f"         出力: {out_path}")
     if image_items:
         print(f"         画像: {os.path.join(out_folder, config['image_folder_name'])}")
+        ac_html = os.path.join(out_folder, "イラストACリンク集.html")
+        if os.path.exists(ac_html):
+            print(f"         イラストACリンク集: {ac_html}")
 
 
 # ── ウォッチモード ─────────────────────────────────────────────────────────────
