@@ -390,7 +390,7 @@ def process_tsv(tsv_path: str) -> None:
     # ── 6. 出力ファイル名を TSV名から生成
     tsv_basename = os.path.basename(tsv_path)
     # 【自ガルN台本】タイトル_YYYYMMDD.tsv → 【自ガルN台本】タイトル
-    stem = re.sub(r"_\d{8}\.tsv$", "", tsv_basename, flags=re.IGNORECASE)
+    stem = re.sub(r"(_\d{8})?\.tsv$", "", tsv_basename, flags=re.IGNORECASE)
     if not stem:
         stem = os.path.splitext(tsv_basename)[0]
 
