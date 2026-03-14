@@ -12,8 +12,10 @@ galchan_auto.py
   python galchan_auto.py path\to\台本.tsv
 
 設定:
-  - VOICEVOX が http://localhost:50021 で起動していること
+  - VOICEVOX が http://localhost:50021 で起動していること（YMM4内蔵）
   - 画像自動挿入には GEMINI_API_KEY 環境変数を設定すること
+  - Drive監視には FOLDER_ID_GALCHAN / GOOGLE_CLIENT_ID /
+    GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN を .env に設定すること
   - config 変数を必要に応じて変更する
 
 TSV形式（4列タブ区切り）:
@@ -105,6 +107,9 @@ config = {
     "google_refresh_token": os.environ.get("GOOGLE_REFRESH_TOKEN", ""),
     "spreadsheet_id":       os.environ.get("SPREADSHEET_ID_GALCHAN", ""),
     "product_sheet_name":   "商品リスト",  # シート名（タブ名）
+    # ── Google Drive 監視設定 ─────────────────────────────────────────────────
+    # アプリが TSV をアップロードするフォルダID（FOLDER_ID_GALCHAN）
+    "folder_id_galchan": os.environ.get("FOLDER_ID_GALCHAN", ""),
 }
 
 # ── キャラクター → VOICEVOX マッピング ───────────────────────────────────────
@@ -534,6 +539,65 @@ def find_product_in_text(text: str, products: list) -> tuple | None:
     return None
 
 
+# ── Google Drive 監視 ────────────────────────────────────────────────────────
+
+_DRIVE_API = "https://www.googleapis.com/drive/v3"
+
+
+def drive_list_new_tsvs(folder_id: str, access_token: str) -> list:
+    """
+    DriveフォルダからTSVファイル（未処理）一覧を取得する。
+    _done.tsv は除外。
+    戻り値: [(file_id, name), ...]
+    """
+    q = (
+        f"'{folder_id}' in parents "
+        "and name contains '.tsv' "
+        "and not name contains '_done' "
+        "and trashed = false"
+    )
+    params = urllib.parse.urlencode({
+        "q": q,
+        "fields": "files(id,name)",
+        "orderBy": "createdTime",
+    })
+    url = f"{_DRIVE_API}/files?{params}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return [(f["id"], f["name"]) for f in data.get("files", [])]
+    except Exception as e:
+        print(f"  [Drive一覧取得失敗] {e}")
+        return []
+
+
+def drive_download_file(file_id: str, dest_path: str, access_token: str) -> None:
+    """DriveファイルをローカルにDLする"""
+    url = f"{_DRIVE_API}/files/{file_id}?alt=media"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        with open(dest_path, "wb") as f:
+            f.write(resp.read())
+
+
+def drive_rename_file(file_id: str, new_name: str, access_token: str) -> None:
+    """DriveファイルをリネームするPATCHリクエスト"""
+    url = f"{_DRIVE_API}/files/{file_id}?fields=name"
+    body = json.dumps({"name": new_name}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        method="PATCH",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        resp.read()
+
+
 # ── いらすとや スクレイピング ─────────────────────────────────────────────────
 
 _IRASUTOYA_HEADERS = {
@@ -932,16 +996,61 @@ def process_tsv(tsv_path: str) -> None:
 # ── ウォッチモード ─────────────────────────────────────────────────────────────
 
 def watch_mode() -> None:
-    """フォルダを監視して新しいTSVを自動処理する"""
+    """ローカルフォルダ + Google Drive を監視して新しいTSVを自動処理する"""
     watch_dir = config["watch_dir"]
     os.makedirs(watch_dir, exist_ok=True)
+
     gemini_status = "有効" if config.get("gemini_api_key") else "無効（GEMINI_API_KEY未設定）"
-    print(f"[ウォッチモード] フォルダ監視中: {watch_dir}")
+    folder_id = config.get("folder_id_galchan", "")
+    drive_enabled = bool(
+        folder_id
+        and config.get("google_client_id")
+        and config.get("google_client_secret")
+        and config.get("google_refresh_token")
+    )
+    drive_status = f"有効（{folder_id[:20]}...）" if drive_enabled else "無効（FOLDER_ID_GALCHAN または Google認証情報が未設定）"
+
+    print(f"[ウォッチモード] ローカル監視: {watch_dir}")
+    print(f"                 Drive 監視: {drive_status}")
     print(f"                 画像自動挿入: {gemini_status}")
     print("Ctrl+C で終了")
 
+    drive_access_token: str | None = None
+    drive_token_expires: float = 0.0  # unixtime
+
     while True:
         try:
+            # ── Google Drive から新しいTSVをダウンロード ──────────────────
+            if drive_enabled:
+                now = time.time()
+                if drive_access_token is None or now >= drive_token_expires:
+                    try:
+                        drive_access_token = google_get_access_token(
+                            config["google_client_id"],
+                            config["google_client_secret"],
+                            config["google_refresh_token"],
+                        )
+                        drive_token_expires = now + 3500  # ~1時間
+                    except Exception as e:
+                        print(f"  [Drive認証失敗] {e}")
+                        drive_access_token = None
+
+                if drive_access_token:
+                    new_tsvs = drive_list_new_tsvs(folder_id, drive_access_token)
+                    for file_id, name in new_tsvs:
+                        dest = os.path.join(watch_dir, name)
+                        if not os.path.exists(dest):
+                            print(f"  [Drive→ローカル] {name}")
+                            try:
+                                drive_download_file(file_id, dest, drive_access_token)
+                                # Drive側を _done にリネーム（再DL防止）
+                                done_name = re.sub(r"\.tsv$", "_done.tsv", name, flags=re.IGNORECASE)
+                                drive_rename_file(file_id, done_name, drive_access_token)
+                                print(f"  [Drive リネーム] {name} → {done_name}")
+                            except Exception as e:
+                                print(f"  [Drive DL失敗] {name}: {e}")
+
+            # ── ローカルフォルダのTSVを処理 ──────────────────────────────
             tsv_files = [
                 os.path.join(watch_dir, f)
                 for f in os.listdir(watch_dir)
@@ -954,6 +1063,7 @@ def watch_mode() -> None:
                     print(f"\n[エラー] {os.path.basename(tsv_path)}: {e}")
                     traceback.print_exc()
                     _show_error_popup(str(e))
+
         except KeyboardInterrupt:
             print("\n[終了]")
             break

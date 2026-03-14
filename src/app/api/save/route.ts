@@ -10,6 +10,7 @@ import { isAuthenticated } from '@/lib/auth'
 import type { GalTopicCandidate, ScriptStyle, GalMaterials, SavedFiles } from '@/lib/types'
 import { SCRIPT_STYLE_LABELS } from '@/lib/types'
 import { uploadTsvToDrive } from '@/lib/google'
+import { dropboxUpload, isDropboxAvailable } from '@/lib/dropbox'
 
 export const runtime = 'nodejs'
 
@@ -238,27 +239,36 @@ export async function POST(req: NextRequest) {
       tsvFilename,
     }
 
-    // Windows ローカル環境の場合はObsidianに書き込む
+    // Obsidian保存: Windows→直接書き込み / Vercel→Dropbox経由
+    const cleanSerial = serial.replace(/[【】]/g, '')
+    const scriptFilename = tsvFilename.replace(/\.tsv$/, '.md')
+    const masterMd = buildObsidianMasterMd(topic, style, script, materials)
+
     if (process.platform === 'win32' && process.env.OBSIDIAN_VAULT_PATH) {
       try {
         const { writeFileSync, mkdirSync } = await import('fs')
         const { join } = await import('path')
         const vaultPath = process.env.OBSIDIAN_VAULT_PATH
-        const cleanSerial = serial.replace(/[【】]/g, '')
 
         // ① ガルネタフォルダ: マスターファイル（Dataview対応・全情報入り）
         const netatDir = join(vaultPath, 'ガルネタ')
         mkdirSync(netatDir, { recursive: true })
-        const masterMd = buildObsidianMasterMd(topic, style, script, materials)
         writeFileSync(join(netatDir, `${cleanSerial}_${safeTitle}.md`), masterMd, 'utf-8')
 
         // ② 台本フォルダ: 台本テキストのみ（YMM4作業用・見やすい）
         const scriptDir = join(vaultPath, '台本')
         mkdirSync(scriptDir, { recursive: true })
-        const scriptFilename = tsvFilename.replace(/\.tsv$/, '.md')
         writeFileSync(join(scriptDir, scriptFilename), files.scriptTxt, 'utf-8')
       } catch (e) {
         console.warn('Obsidian local write skipped:', e)
+      }
+    } else if (isDropboxAvailable()) {
+      // Vercel環境: Dropbox経由でObsidianに同期
+      try {
+        await dropboxUpload(`ガルネタ/${cleanSerial}_${safeTitle}.md`, masterMd)
+        await dropboxUpload(`台本/${scriptFilename}`, files.scriptTxt)
+      } catch (e) {
+        console.warn('Dropbox Obsidian upload skipped:', e)
       }
     }
 
