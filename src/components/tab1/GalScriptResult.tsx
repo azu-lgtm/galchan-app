@@ -29,7 +29,6 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   const [materials, setMaterials] = useState<GalMaterials | null>(null)
   const [loadingMaterials, setLoadingMaterials] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [savingSheets, setSavingSheets] = useState(false)
   const [savedFiles, setSavedFiles] = useState<SavedFiles | null>(null)
   const [sheetsSaved, setSheetsSaved] = useState(false)
   const [sheetsUrl, setSheetsUrl] = useState<string | null>(null)
@@ -84,12 +83,24 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
       setSavedFiles(files)
       if (dUrl) setDriveUrl(dUrl)
 
-      // ブラウザからダウンロード（TSVは正式ファイル名で）
-      const serial = materials.serialNumber?.replace(/[【】]/g, '') ?? 'tmp'
-      downloadText(files.ideaMd, `${serial}_idea.md`)
-      downloadText(files.scriptTxt, `${serial}_script.txt`)
-      downloadText(files.materialsJson, `${serial}_materials.json`, 'application/json')
-      downloadText(files.csvTsv, files.tsvFilename)
+      // Sheetsへの保存も同時に実行
+      try {
+        const sheetsRes = await fetch('/api/google/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, style, script, materials }),
+        })
+        const sheetsData = await sheetsRes.json()
+        if (sheetsRes.ok) {
+          setSheetsSaved(true)
+          if (sheetsData.spreadsheetUrl) setSheetsUrl(sheetsData.spreadsheetUrl)
+        } else {
+          console.warn('Sheets保存失敗:', sheetsData.error)
+          setError(`Sheets保存失敗: ${sheetsData.error}`)
+        }
+      } catch (e) {
+        console.warn('Sheets保存エラー:', e)
+      }
     } catch (err) {
       setError(String(err))
     } finally {
@@ -133,27 +144,6 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
     downloadText(rows, `${scriptName}${safeTitle}_${dateStr}.tsv`)
   }
 
-  const handleSaveSheets = async () => {
-    if (!materials) return
-    setSavingSheets(true)
-    setError('')
-    try {
-      const res = await fetch('/api/google/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, style, script, materials }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Sheets保存に失敗しました')
-      setSheetsSaved(true)
-      if (data.spreadsheetUrl) setSheetsUrl(data.spreadsheetUrl)
-    } catch (err) {
-      setError(String(err))
-    } finally {
-      setSavingSheets(false)
-    }
-  }
-
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text)
     setCopied(key)
@@ -191,7 +181,17 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
         </button>
         {scriptOpen && (
           <div className="border-t border-border-soft px-4 pb-4">
-            <div className="flex justify-end mt-2 mb-2">
+            <div className="flex items-center justify-between mt-2 mb-2">
+              <span className={`text-xs font-medium ${
+                script.length >= 8400 && script.length <= 8600
+                  ? 'text-green-600'
+                  : script.length < 8400
+                  ? 'text-orange-500'
+                  : 'text-red-500'
+              }`}>
+                {script.length.toLocaleString()}文字
+                {script.length >= 8400 && script.length <= 8600 ? ' ✓' : script.length < 8400 ? ' (不足)' : ' (超過)'}
+              </span>
               <button
                 onClick={() => copy(script, 'script')}
                 className="text-xs text-accent hover:text-accent-dark"
@@ -343,40 +343,10 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
         </Button>
       </div>
 
-      <Button
-        variant="secondary"
-        onClick={handleSaveSheets}
-        loading={savingSheets}
-        disabled={!materials || sheetsSaved}
-        className="w-full"
-      >
-        {sheetsSaved ? '✅ 台本スプレッドシートを作成しました' : '📊 Sheetsに保存（台本スプシ作成＋管理シート追記）'}
-      </Button>
-
-      {sheetsUrl && (
-        <Card padding="sm">
-          <p className="text-xs text-text-secondary mb-1">台本スプレッドシート</p>
-          <a
-            href={sheetsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-accent hover:text-accent-dark break-all"
-          >
-            {sheetsUrl}
-          </a>
-          <button
-            onClick={() => copy(sheetsUrl, 'sheetsUrl')}
-            className="ml-2 text-xs text-text-secondary hover:text-accent"
-          >
-            {copied === 'sheetsUrl' ? '✓ コピー済み' : 'コピー'}
-          </button>
-        </Card>
-      )}
-
       {savedFiles && (
         <Card padding="sm">
           <p className="text-xs text-text-secondary text-center">
-            4ファイルをダウンロードしました（idea.md / script.txt / materials.json / tsv）
+            ✅ 保存完了（Obsidian・Drive・スプシ）
           </p>
           {driveUrl && (
             <div className="mt-2 text-center">
@@ -388,6 +358,19 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
                 className="text-xs text-accent hover:text-accent-dark break-all"
               >
                 {driveUrl}
+              </a>
+            </div>
+          )}
+          {sheetsUrl && (
+            <div className="mt-2 text-center">
+              <p className="text-xs text-text-secondary mb-1">📊 台本スプレッドシート</p>
+              <a
+                href={sheetsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:text-accent-dark break-all"
+              >
+                {sheetsUrl}
               </a>
             </div>
           )}
