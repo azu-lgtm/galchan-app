@@ -190,7 +190,8 @@ export async function uploadTsvToDrive(
   if (!folderId) throw new Error('FOLDER_ID_GALCHAN が未設定です')
 
   const { Readable } = await import('stream')
-  const body = Readable.from([Buffer.from('\uFEFF' + content, 'utf-8')]) // BOM付きUTF-8
+  const encoded = new TextEncoder().encode('\uFEFF' + content) // BOM付きUTF-8
+  const body = Readable.from([Buffer.from(encoded)])
 
   const res = await drive.files.create({
     requestBody: {
