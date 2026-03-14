@@ -42,6 +42,28 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
+
+# ── .env 読み込み ──────────────────────────────────────────────────────────────
+
+def _load_dotenv() -> None:
+    """シンプルな.envローダー（stdlib）。既にos.environにある値は上書きしない"""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+_load_dotenv()
+
 # ── 設定 ──────────────────────────────────────────────────────────────────────
 
 config = {
@@ -75,6 +97,14 @@ config = {
     "image_y": 50.0,       # Y位置（中心からのオフセット）
     "image_folder_name": "使用画像",  # 画像保存サブフォルダ名
     "image_max": 20,       # いらすとや 最大使用枚数（マニュアル準拠）
+    # ── Google Sheets 商品リスト設定 ─────────────────────────────────────────
+    # .env から自動読み込み（GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET /
+    # GOOGLE_REFRESH_TOKEN / SPREADSHEET_ID_GALCHAN）
+    "google_client_id":     os.environ.get("GOOGLE_CLIENT_ID", ""),
+    "google_client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+    "google_refresh_token": os.environ.get("GOOGLE_REFRESH_TOKEN", ""),
+    "spreadsheet_id":       os.environ.get("SPREADSHEET_ID_GALCHAN", ""),
+    "product_sheet_name":   "商品リスト",  # シート名（タブ名）
 }
 
 # ── キャラクター → VOICEVOX マッピング ───────────────────────────────────────
@@ -394,6 +424,116 @@ function openAllAC() {{
         f.write(html)
 
 
+# ── Google Sheets / Amazon 商品画像 ──────────────────────────────────────────
+
+def google_get_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
+    """リフレッシュトークンからGoogleアクセストークンを取得する"""
+    body = urllib.parse.urlencode({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return data["access_token"]
+
+
+def sheets_read_product_list(spreadsheet_id: str, sheet_name: str, access_token: str) -> list:
+    """
+    Google Sheetsの「商品リスト」シートを読み込む。
+    列構成: A=No. / B=商品名型番（代表例）/ C=商品リンク
+    戻り値: [(商品名, Amazon_URL), ...]
+    """
+    encoded_sheet = urllib.parse.quote(sheet_name)
+    url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+        f"/values/{encoded_sheet}!A:C"
+    )
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"  [商品リスト取得失敗] {e}")
+        return []
+
+    rows = data.get("values", [])
+    products = []
+    for row in rows[1:]:  # 1行目はヘッダーとしてスキップ
+        if len(row) >= 3:
+            name = row[1].strip()   # B列: 商品名型番
+            link = row[2].strip()   # C列: 商品リンク
+            if name and link:
+                products.append((name, link))
+    return products
+
+
+def amazon_asin_from_url(url: str) -> str | None:
+    """Amazon URLからASIN（10桁英数字）を抽出する"""
+    m = re.search(r'/(?:dp|gp/product)/([A-Z0-9]{10})', url)
+    return m.group(1) if m else None
+
+
+def amazon_image_download(amazon_url: str, dest_dir: str, product_name: str) -> str | None:
+    """
+    Amazon商品URLから商品画像をダウンロードしてローカルパスを返す。
+    同一商品は再ダウンロードしない（キャッシュ）。
+    """
+    asin = amazon_asin_from_url(amazon_url)
+    if not asin:
+        print(f"  [Amazon画像スキップ] ASINが取得できません: {amazon_url}")
+        return None
+
+    safe = re.sub(r'[\\/:*?"<>|]', '_', product_name)[:40]
+    out_path = os.path.join(dest_dir, f"amz_{safe}.jpg")
+
+    # キャッシュ確認
+    if os.path.exists(out_path):
+        return out_path
+
+    # Amazon画像URL（ASINから直接組み立て）
+    img_url = f"https://m.media-amazon.com/images/P/{asin}.01._SL500_.jpg"
+    req = urllib.request.Request(
+        img_url,
+        headers={"User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            img_data = resp.read()
+        if len(img_data) < 1000:
+            print(f"  [Amazon画像取得失敗] 画像が空です: {product_name}")
+            return None
+        with open(out_path, "wb") as f:
+            f.write(img_data)
+        print(f"  [Amazon画像DL] {product_name} (ASIN:{asin}) → {os.path.basename(out_path)}")
+        return out_path
+    except Exception as e:
+        print(f"  [Amazon画像DL失敗] {product_name}: {e}")
+        return None
+
+
+def find_product_in_text(text: str, products: list) -> tuple | None:
+    """
+    セリフテキストに商品名が含まれるか確認する。
+    戻り値: マッチした (商品名, Amazon_URL) または None
+    """
+    for name, link in products:
+        if name in text:
+            return (name, link)
+    return None
+
+
 # ── いらすとや スクレイピング ─────────────────────────────────────────────────
 
 _IRASUTOYA_HEADERS = {
@@ -694,32 +834,66 @@ def process_tsv(tsv_path: str) -> None:
             images_dir = os.path.join(out_folder, config["image_folder_name"])
             os.makedirs(images_dir, exist_ok=True)
 
+            # ── 商品リスト読み込み（Sheets API）
+            product_list = []
+            g_client_id     = config.get("google_client_id", "")
+            g_client_secret = config.get("google_client_secret", "")
+            g_refresh       = config.get("google_refresh_token", "")
+            sheets_id       = config.get("spreadsheet_id", "")
+            if sheets_id and g_client_id and g_client_secret and g_refresh:
+                try:
+                    print("  商品リスト読み込み中 (Google Sheets)...")
+                    access_token = google_get_access_token(g_client_id, g_client_secret, g_refresh)
+                    product_list = sheets_read_product_list(
+                        sheets_id, config["product_sheet_name"], access_token
+                    )
+                    if product_list:
+                        print(f"  商品リスト: {len(product_list)}件 "
+                              f"({', '.join(n for n, _ in product_list[:3])}{'...' if len(product_list)>3 else ''})")
+                    else:
+                        print("  商品リスト: 0件（このスクリプトに商品なし）")
+                except Exception as e:
+                    print(f"  [商品リスト取得失敗] {e} → いらすとやのみで続行")
+
             # イラストAC リンク集 HTML を生成（キーワード確定後すぐ）
             ac_html_path = os.path.join(out_folder, "イラストACリンク集.html")
             generate_ac_links_html(voice_records, keywords, ac_html_path)
             print(f"  リンク集生成: {ac_html_path}")
 
-            img_cache = {}  # keyword → local path (None = DL失敗)
+            img_cache = {}  # key → local path (None = DL失敗 or スキップ)
             max_images = config.get("image_max", 20)
-            dl_count = 0   # ダウンロード済み枚数（キャッシュ除く）
+            dl_count = 0   # いらすとやのダウンロード済み枚数
+
             for i, (frame, length, speaker, text) in enumerate(voice_records):
                 kw = keywords[i]
-                # 新規キーワードで上限チェック
-                if kw not in img_cache:
-                    if dl_count >= max_images:
-                        print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
-                        img_cache[kw] = None  # 以降同キーワードもスキップ
-                    else:
-                        print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
-                        img_cache[kw] = irasutoya_download(kw, images_dir)
-                        if img_cache[kw]:
-                            dl_count += 1
-                img_path = img_cache.get(kw)
+
+                # ── 商品マッチング確認
+                matched = find_product_in_text(text, product_list)
+                if matched:
+                    p_name, p_link = matched
+                    cache_key = f"__amz__{p_name}"
+                    if cache_key not in img_cache:
+                        print(f"  [{i+1}/{len(voice_records)}] 商品画像: 「{p_name}」")
+                        img_cache[cache_key] = amazon_image_download(p_link, images_dir, p_name)
+                    img_path = img_cache.get(cache_key)
+                else:
+                    # ── いらすとや（従来通り）
+                    if kw not in img_cache:
+                        if dl_count >= max_images:
+                            print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
+                            img_cache[kw] = None
+                        else:
+                            print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
+                            img_cache[kw] = irasutoya_download(kw, images_dir)
+                            if img_cache[kw]:
+                                dl_count += 1
+                    img_path = img_cache.get(kw)
+
                 if img_path and os.path.exists(img_path):
                     img_item = build_image_item(proto_image, img_path, frame, length)
                     image_items.append(img_item)
 
-            print(f"  画像挿入: {len(image_items)}件")
+            print(f"  画像挿入: {len(image_items)}件 (Amazon商品画像 + いらすとや)")
         except Exception as e:
             print(f"  [画像生成スキップ] エラーが発生しました: {e}")
             traceback.print_exc()
