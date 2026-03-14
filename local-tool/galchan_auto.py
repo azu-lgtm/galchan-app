@@ -307,7 +307,13 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
     rows_html = ""
     for idx, (kw, info) in enumerate(seen.items(), 1):
         ira_url = f"https://www.irasutoya.com/search?q={urllib.parse.quote(kw)}"
-        ac_url  = f"https://www.ac-illust.com/main/search_result.php?q={urllib.parse.quote(kw)}"
+        # なのなのな作家に絞って検索
+        ac_url  = (
+            f"https://www.ac-illust.com/main/search_result.php"
+            f"?search_word={urllib.parse.quote(kw)}"
+            f"&sl=ja&creator=%E3%81%AA%E3%81%AE%E3%81%AA%E3%81%AE%E3%81%AA"
+            f"&srt=-releasedate&orientation=all&format=all&crtsec=allsec=all"
+        )
         ellipsis = "…" if len(info["text"]) == 30 else ""
         rows_html += (
             f'<tr>'
@@ -342,15 +348,15 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
 </style>
 </head>
 <body>
-<h1>🖼 画像キーワードリスト（イラストAC / いらすとや）</h1>
+<h1>🖼 画像キーワードリスト</h1>
 <p class="note">
   ダウンロードした画像は <code>使用画像/</code> フォルダに保存してください。<br>
-  いらすとや はすでに自動挿入済み。イラストAC は手動でダウンロード → YMM4 で差し替え。
+  ✅ <b>いらすとや</b>：自動挿入済み　／　🖊 <b>イラストAC（なのなのな作家）</b>：手動でDL → YMM4 で差し替え
 </p>
 <table>
 <tr>
   <th>#</th><th>キーワード</th><th>話者</th><th>セリフ（冒頭）</th>
-  <th>いらすとや</th><th>イラストAC</th>
+  <th>いらすとや</th><th>イラストAC（なのなのな）</th>
 </tr>
 {rows_html}
 </table>
