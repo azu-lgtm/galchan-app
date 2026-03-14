@@ -5,36 +5,38 @@ function repairJson(s: string): string {
   return s.replace(/,\s*([\]}])/g, '$1')
 }
 
-/** テキストから最初のJSONオブジェクトを抽出する（文字列内の括弧を正しく処理） */
+/** テキストから最後のJSONオブジェクトを抽出する（思考モデルのchain-of-thought対応） */
 function extractJsonObject(text: string): string | null {
-  // コードブロック内のJSONを優先
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-  if (fenceMatch) {
-    const candidate = fenceMatch[1].trim()
+  // コードブロックをすべて抽出し、JSONとして解析できる最後のものを使う
+  const fenceMatches = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/g)]
+  for (let i = fenceMatches.length - 1; i >= 0; i--) {
+    const candidate = fenceMatches[i][1].trim()
     if (candidate.startsWith('{')) return repairJson(candidate)
   }
 
-  // 最初の { から、文字列内の {} を正しくスキップしつつ対応する } を探す
-  const start = text.indexOf('{')
-  if (start === -1) return null
-
-  let depth = 0
-  let inString = false
-  let escaped = false
-
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\' && inString) { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) return repairJson(text.slice(start, i + 1))
+  // コードブロックなし: 文字列内の {} を正しくスキップしつつ最後の完結した {} を探す
+  let lastJson: string | null = null
+  let i = 0
+  while (i < text.length) {
+    if (text[i] !== '{') { i++; continue }
+    const start = i
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (; i < text.length; i++) {
+      const ch = text[i]
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\' && inString) { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) { lastJson = repairJson(text.slice(start, i + 1)); i++; break }
+      }
     }
   }
-  return null
+  return lastJson
 }
 
 import { isAuthenticated } from '@/lib/auth'

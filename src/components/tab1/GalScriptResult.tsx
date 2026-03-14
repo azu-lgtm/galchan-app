@@ -25,7 +25,12 @@ function downloadText(content: string, filename: string, mimeType = 'text/plain'
   URL.revokeObjectURL(url)
 }
 
-export default function GalScriptResult({ script, topic, style, onBack, onReset }: Props) {
+interface PropsWithScript extends Props {
+  onScriptUpdate?: (newScript: string) => void
+}
+
+export default function GalScriptResult({ script: initialScript, topic, style, onBack, onReset, onScriptUpdate }: PropsWithScript & { script: string }) {
+  const [script, setScript] = useState(initialScript)
   const [materials, setMaterials] = useState<GalMaterials | null>(null)
   const [loadingMaterials, setLoadingMaterials] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -36,6 +41,10 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
   const [error, setError] = useState('')
   const [scriptOpen, setScriptOpen] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
+  const [regenInstruction, setRegenInstruction] = useState('')
+  const [regenOpen, setRegenOpen] = useState(false)
+  const [regenLoading, setRegenLoading] = useState(false)
+  const [regenStream, setRegenStream] = useState('')
 
   // マウント時に素材を自動生成
   useEffect(() => {
@@ -144,6 +153,44 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
     downloadText(rows, `${scriptName}${safeTitle}_${dateStr}.tsv`)
   }
 
+  const handleRegen = async () => {
+    if (!regenInstruction.trim()) return
+    setRegenLoading(true)
+    setRegenStream('')
+    setError('')
+    try {
+      const res = await fetch('/api/gemini/regenerate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script, topic, style, instruction: regenInstruction }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || '再生成に失敗しました')
+      }
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        full += decoder.decode(value, { stream: true })
+        setRegenStream(full)
+      }
+      setScript(full)
+      setRegenStream('')
+      setRegenInstruction('')
+      setRegenOpen(false)
+      // 素材はリセット（台本が変わったので再生成が必要）
+      setMaterials(null)
+      setSavedFiles(null)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setRegenLoading(false)
+    }
+  }
+
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text)
     setCopied(key)
@@ -205,6 +252,40 @@ export default function GalScriptResult({ script, topic, style, onBack, onReset 
           </div>
         )}
       </Card>
+
+      {/* こうして再生成 */}
+      <div className="rounded-2xl border border-border-soft bg-white overflow-hidden">
+        <button
+          onClick={() => setRegenOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-text-primary hover:bg-base/50 transition-colors"
+        >
+          <span>✏️ こうして再生成する</span>
+          <span className="text-text-secondary">{regenOpen ? '▲' : '▼'}</span>
+        </button>
+        {regenOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-border-soft pt-3">
+            <textarea
+              value={regenInstruction}
+              onChange={e => setRegenInstruction(e.target.value)}
+              placeholder="例: もっと感情的な言葉を増やして。スレ民のセリフを3つ追加して8500字に近づけて。オープニングを短くして。"
+              rows={3}
+              className="w-full text-sm border border-border-soft rounded-xl px-3 py-2 bg-base focus:outline-none focus:border-accent resize-none"
+            />
+            {regenLoading && regenStream && (
+              <div className="text-xs font-mono bg-base rounded-xl p-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-text-secondary">
+                {regenStream}
+              </div>
+            )}
+            <button
+              onClick={handleRegen}
+              disabled={!regenInstruction.trim() || regenLoading}
+              className="w-full text-sm py-2 rounded-xl border border-accent bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors disabled:opacity-40"
+            >
+              {regenLoading ? '再生成中...' : '🔄 この指示で再生成'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 素材一式 */}
       {loadingMaterials ? (

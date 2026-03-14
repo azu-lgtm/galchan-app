@@ -156,20 +156,9 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
       if (!res.ok) {
         alert('保存失敗: ' + (d.error ?? '不明なエラー'))
       } else {
-        // Vercel等: ブラウザでMDファイルをダウンロード
-        if (d.downloadMode && d.content && d.fileName) {
-          const blob = new Blob([d.content], { type: 'text/markdown;charset=utf-8' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = d.fileName
-          a.click()
-          URL.revokeObjectURL(url)
-          // filePath はダミー（mark-posted用）
-          setSavedFilePaths(prev => new Map(prev).set(id, `download:${d.fileName}`))
-        } else if (d.filePath) {
-          setSavedFilePaths(prev => new Map(prev).set(id, d.filePath))
-        }
+        // filePath（ローカル書き込み or Dropbox経由）
+        const fp = d.filePath ?? (d.fileName ? `dropbox:${d.fileName}` : 'saved')
+        setSavedFilePaths(prev => new Map(prev).set(id, fp))
         setSavedIds(prev => new Set(prev).add(id))
       }
     } catch (err) {
@@ -208,15 +197,6 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
         alert('投稿済み更新失敗: ' + (d.error ?? '不明なエラー'))
       } else {
         // ダウンロードモード: 投稿済みMDをDL
-        if (d.downloadMode && d.content && d.fileName) {
-          const blob = new Blob([d.content], { type: 'text/markdown;charset=utf-8' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = d.fileName
-          a.click()
-          URL.revokeObjectURL(url)
-        }
         setPostedIds(prev => new Set(prev).add(id))
       }
     } catch (err) {
