@@ -74,6 +74,7 @@ config = {
     "image_x": 300.0,      # X位置（中心からのオフセット、右寄り）
     "image_y": 50.0,       # Y位置（中心からのオフセット）
     "image_folder_name": "使用画像",  # 画像保存サブフォルダ名
+    "image_max": 20,       # いらすとや 最大使用枚数（マニュアル準拠）
 }
 
 # ── キャラクター → VOICEVOX マッピング ───────────────────────────────────────
@@ -588,11 +589,20 @@ def process_tsv(tsv_path: str) -> None:
             os.makedirs(images_dir, exist_ok=True)
 
             img_cache = {}  # keyword → local path (None = DL失敗)
+            max_images = config.get("image_max", 20)
+            dl_count = 0   # ダウンロード済み枚数（キャッシュ除く）
             for i, (frame, length, speaker, text) in enumerate(voice_records):
                 kw = keywords[i]
+                # 新規キーワードで上限チェック
                 if kw not in img_cache:
-                    print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」")
-                    img_cache[kw] = irasutoya_download(kw, images_dir)
+                    if dl_count >= max_images:
+                        print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
+                        img_cache[kw] = None  # 以降同キーワードもスキップ
+                    else:
+                        print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
+                        img_cache[kw] = irasutoya_download(kw, images_dir)
+                        if img_cache[kw]:
+                            dl_count += 1
                 img_path = img_cache.get(kw)
                 if img_path and os.path.exists(img_path):
                     img_item = build_image_item(proto_image, img_path, frame, length)
