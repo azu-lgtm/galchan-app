@@ -326,6 +326,12 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
             f'</tr>\n'
         )
 
+    # イラストAC URLリスト（JS用）
+    ac_urls_js = ", ".join(
+        f'"{( "https://www.ac-illust.com/main/search_result.php" + "?search_word=" + urllib.parse.quote(kw) + "&sl=ja&creator=%E3%81%AA%E3%81%AE%E3%81%AA%E3%81%AE%E3%81%AA" + "&srt=-releasedate&orientation=all&format=all" )}"'
+        for kw in seen
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -333,8 +339,18 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
 <title>画像キーワードリスト</title>
 <style>
   body {{ font-family: sans-serif; padding: 20px; background: #f8f5f0; }}
-  h1 {{ font-size: 18px; color: #3D3530; }}
-  p.note {{ color: #666; font-size: 13px; margin-bottom: 16px; }}
+  h1 {{ font-size: 18px; color: #3D3530; margin-bottom: 6px; }}
+  p.note {{ color: #666; font-size: 13px; margin-bottom: 12px; }}
+  .btn-wrap {{ margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }}
+  .btn {{
+    padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 14px; font-weight: bold; white-space: nowrap;
+  }}
+  .btn-ac {{ background: #e8562a; color: white; }}
+  .btn-ac:hover {{ background: #c94520; }}
+  .btn-ira {{ background: #4caf50; color: white; }}
+  .btn-ira:hover {{ background: #388e3c; }}
+  .btn-note {{ font-size: 12px; color: #888; }}
   table {{ border-collapse: collapse; width: 100%; }}
   th {{ background: #8C7B6E; color: white; padding: 8px 12px; text-align: left; }}
   td {{ padding: 7px 12px; border-bottom: 1px solid #ddd; font-size: 14px; }}
@@ -350,9 +366,12 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
 <body>
 <h1>🖼 画像キーワードリスト</h1>
 <p class="note">
-  ダウンロードした画像は <code>使用画像/</code> フォルダに保存してください。<br>
-  ✅ <b>いらすとや</b>：自動挿入済み　／　🖊 <b>イラストAC（なのなのな作家）</b>：手動でDL → YMM4 で差し替え
+  ✅ <b>いらすとや</b>：ymmpに自動挿入済み　／　🖊 <b>イラストAC（なのなのな）</b>：下のボタンで一括検索 → DL → <code>使用画像/</code> に保存 → YMM4で差し替え
 </p>
+<div class="btn-wrap">
+  <button class="btn btn-ac" onclick="openAllAC()">🔍 イラストAC（なのなのな）を全キーワードで一括検索</button>
+  <span class="btn-note">※ポップアップブロックを解除してください</span>
+</div>
 <table>
 <tr>
   <th>#</th><th>キーワード</th><th>話者</th><th>セリフ（冒頭）</th>
@@ -360,6 +379,14 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
 </tr>
 {rows_html}
 </table>
+<script>
+const acUrls = [{ac_urls_js}];
+function openAllAC() {{
+  acUrls.forEach((url, i) => {{
+    setTimeout(() => window.open(url, '_blank'), i * 300);
+  }});
+}}
+</script>
 </body>
 </html>"""
 
@@ -720,6 +747,12 @@ def process_tsv(tsv_path: str) -> None:
         ac_html = os.path.join(out_folder, "イラストACリンク集.html")
         if os.path.exists(ac_html):
             print(f"         イラストACリンク集: {ac_html}")
+            # ブラウザで自動オープン（Windowsのみ）
+            try:
+                os.startfile(ac_html)
+                print(f"  [ブラウザ起動] イラストACリンク集を開きました")
+            except Exception:
+                pass
 
 
 # ── ウォッチモード ─────────────────────────────────────────────────────────────
