@@ -229,16 +229,21 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
         {scriptOpen && (
           <div className="border-t border-border-soft px-4 pb-4">
             <div className="flex items-center justify-between mt-2 mb-2">
-              <span className={`text-xs font-medium ${
-                script.length >= 8400 && script.length <= 8600
-                  ? 'text-green-600'
-                  : script.length < 8400
-                  ? 'text-orange-500'
-                  : 'text-red-500'
-              }`}>
-                {script.length.toLocaleString()}文字
-                {script.length >= 8400 && script.length <= 8600 ? ' ✓' : script.length < 8400 ? ' (不足)' : ' (超過)'}
-              </span>
+              {(() => {
+                // 【話者名】タグを除いた本文のみの文字数
+                const spokenLen = script.split('\n').filter(l => l.trim()).reduce((sum, line) => {
+                  const m = line.match(/^【.+?】(.*)$/)
+                  return sum + (m ? m[1].trim().length : 0)
+                }, 0)
+                const ok = spokenLen >= 8400 && spokenLen <= 8600
+                const short = spokenLen < 8400
+                return (
+                  <span className={`text-xs font-medium ${ok ? 'text-green-600' : short ? 'text-orange-500' : 'text-red-500'}`}>
+                    {spokenLen.toLocaleString()}文字（本文のみ）
+                    {ok ? ' ✓' : short ? ' (不足)' : ' (超過)'}
+                  </span>
+                )
+              })()}
               <button
                 onClick={() => copy(script, 'script')}
                 className="text-xs text-accent hover:text-accent-dark"
