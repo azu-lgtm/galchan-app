@@ -1,20 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-/** テキストから最初のJSONオブジェクトを抽出する */
+/** トレイリングカンマ等のよくあるJSON不正を修正する */
+function repairJson(s: string): string {
+  return s.replace(/,\s*([\]}])/g, '$1')
+}
+
+/** テキストから最初のJSONオブジェクトを抽出する（文字列内の括弧を正しく処理） */
 function extractJsonObject(text: string): string | null {
   // コードブロック内のJSONを優先
-  const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
-  if (fenceMatch) return fenceMatch[1]
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+  if (fenceMatch) {
+    const candidate = fenceMatch[1].trim()
+    if (candidate.startsWith('{')) return repairJson(candidate)
+  }
 
-  // 最初の { から対応する } までを抽出
+  // 最初の { から、文字列内の {} を正しくスキップしつつ対応する } を探す
   const start = text.indexOf('{')
   if (start === -1) return null
+
   let depth = 0
+  let inString = false
+  let escaped = false
+
   for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++
-    else if (text[i] === '}') {
+    const ch = text[i]
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\' && inString) { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') depth++
+    else if (ch === '}') {
       depth--
-      if (depth === 0) return text.slice(start, i + 1)
+      if (depth === 0) return repairJson(text.slice(start, i + 1))
     }
   }
   return null

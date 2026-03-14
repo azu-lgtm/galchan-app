@@ -6,6 +6,7 @@
  * OAuth Client → あずきアカウント（3）のGCP
  */
 import { google } from 'googleapis'
+import { Readable } from 'stream'
 import type { GalMaterials, ScriptStyle } from './types'
 import { SCRIPT_STYLE_LABELS } from './types'
 
@@ -189,9 +190,8 @@ export async function uploadTsvToDrive(
 
   if (!folderId) throw new Error('FOLDER_ID_GALCHAN が未設定です')
 
-  const { Readable } = await import('stream')
   const encoded = new TextEncoder().encode('\uFEFF' + content) // BOM付きUTF-8
-  const body = Readable.from([Buffer.from(encoded)])
+  const body = Readable.from([encoded])
 
   const res = await drive.files.create({
     requestBody: {

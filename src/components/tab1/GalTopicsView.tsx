@@ -134,6 +134,9 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
   const [markingPostedIds, setMarkingPostedIds] = useState<Set<string>>(new Set())
   const [postedIds, setPostedIds] = useState<Set<string>>(new Set())
   const [bulkSaving, setBulkSaving] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualTitle, setManualTitle] = useState('')
+  const [manualDesc, setManualDesc] = useState('')
 
   const totalCount = topics.galchan.length + topics.trends.length + topics.competitors.length
   const allTopics = [...topics.galchan, ...topics.trends, ...topics.competitors]
@@ -314,6 +317,62 @@ export default function GalTopicsView({ topics, onScriptReady, onBack }: Props) 
               : `📝 全件Obsidian保存（${totalCount - savedCount}件）`
           }
         </button>
+      </div>
+
+      {/* 手動テーマ入力 */}
+      <div className="rounded-2xl border border-border-soft bg-white overflow-hidden">
+        <button
+          onClick={() => setManualOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-text-primary hover:bg-base/50 transition-colors"
+        >
+          <span>✏️ テーマを手動で入力する</span>
+          <span className="text-text-secondary">{manualOpen ? '▲' : '▼'}</span>
+        </button>
+        {manualOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-border-soft pt-3">
+            <div>
+              <label className="text-xs text-text-secondary block mb-1">タイトル</label>
+              <input
+                type="text"
+                value={manualTitle}
+                onChange={e => setManualTitle(e.target.value)}
+                placeholder="例: 昔の常識はもう危険 40代以降に見直すべき健康習慣"
+                className="w-full text-sm border border-border-soft rounded-xl px-3 py-2 bg-base focus:outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-1">概要（任意）</label>
+              <textarea
+                value={manualDesc}
+                onChange={e => setManualDesc(e.target.value)}
+                placeholder="内容の補足説明（省略可）"
+                rows={2}
+                className="w-full text-sm border border-border-soft rounded-xl px-3 py-2 bg-base focus:outline-none focus:border-accent resize-none"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!manualTitle.trim()) return
+                const t: GalTopicCandidate = {
+                  title: manualTitle.trim(),
+                  description: manualDesc.trim() || manualTitle.trim(),
+                  angle: '手動入力',
+                  emotionWords: [],
+                  category: 'galchan',
+                  sourceUrl: '',
+                  source: '',
+                }
+                setSelectedTopic(t)
+                setSelectedStyle(null)
+                setManualOpen(false)
+              }}
+              disabled={!manualTitle.trim()}
+              className="w-full text-sm py-2 rounded-xl border border-accent bg-accent/10 text-accent font-medium hover:bg-accent/20 transition-colors disabled:opacity-40"
+            >
+              このテーマで選択する
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 3カテゴリ表示 */}
