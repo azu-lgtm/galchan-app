@@ -55,9 +55,9 @@ ${analyticsText ? `【チャンネルアナリティクス】\n${analyticsText}\
 
 上記のネタ情報をもとに、台本を生成してください。
 
-⚠️ 文字数の最終確認（必須）：【話者名】タグを除いた本文セリフのみの合計文字数が8400〜8600文字になっていることを確認してから出力してください。不足している場合は、スレ民のセリフやナレーションを追加して8400文字以上にしてください。`
+⚠️ 文字数の最終確認（必須）：タブ区切り2列目（本文）のみの合計文字数が8400〜8600文字になっていることを確認してから出力してください。不足している場合は、スレ民のセリフを追加して8400文字以上にしてください。`
 
-    const stream = streamGemini(prompt, 8192)
+    const stream = streamGemini(prompt, 24576)
     return new NextResponse(stream, { headers: STREAM_HEADERS })
   } catch (err) {
     console.error('script generation error:', err)

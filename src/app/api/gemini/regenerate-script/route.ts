@@ -37,16 +37,16 @@ ${instruction}
 ---
 
 【ルール】
-・出力形式：【話者名】本文 の形式で1行1セリフ（変更なし）
+・出力形式：タブ区切り3列（話者\t本文\t空欄）・1行1発言・空行なし
 ・見出し記号（#）は使わない
-・台本の合計文字数：8400〜8600文字（厳守）
+・タブ区切り2列目（本文）のみの合計文字数：8400〜8600文字（厳守）
 ・不足の場合はスレ民のセリフを追加すること
 ・登場人物：ナレーション、タイトル、イッチ、スレ民1〜6
 ・指示された箇所のみ修正し、それ以外は元の台本を維持する
 
 修正後の台本を出力してください（説明文なし・台本のみ）。`
 
-    const stream = streamGemini(prompt, 8192)
+    const stream = streamGemini(prompt, 24576)
     return new NextResponse(stream, { headers: STREAM_HEADERS })
   } catch (err) {
     console.error('regenerate-script error:', err)
