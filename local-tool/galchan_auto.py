@@ -899,65 +899,99 @@ def process_tsv(tsv_path: str) -> None:
     ]
 
     # ── 4. 各行のVoiceItem生成
-    print(f"  音声生成中... ({len(rows)}行)")
+    # イントロ行（ナレーション/タイトル）と本文行に分離
+    INTRO_SPEAKERS = {"ナレーション", "タイトル"}
+    intro_rows = []
+    body_rows = []
+    found_body = False
+    for row in rows:
+        spk = row[0].strip()
+        if not found_body and spk in INTRO_SPEAKERS:
+            intro_rows.append(row)
+        else:
+            found_body = True
+            body_rows.append(row)
+
+    print(f"  音声生成中... ({len(rows)}行 = イントロ{len(intro_rows)}行 + 本文{len(body_rows)}行)")
     new_items = []
     voice_records = []   # (start_frame, length_frames, speaker, text)
-    current_frame = 524  # イントロ終了後（Frame=524）から本文配置を開始
 
-    for idx, (speaker, text, se) in enumerate(rows):
+    def _get_proto(char_info):
+        proto_key = char_info["ymmp_name"].strip()
+        p = proto_voice.get(proto_key)
+        if p is None:
+            layer = char_info["layer"]
+            for pv in proto_voice.values():
+                if pv.get("Layer") == layer:
+                    return pv
+        return p or next(iter(proto_voice.values()))
+
+    def _synth(char_key, char_info, text):
+        style_id = char_info["style_id"]
+        speed    = char_info["speed_scale"]
+        post     = char_info["post_phoneme_length"]
+        aq = voicevox_audio_query(text, style_id)
+        aq["speedScale"]        = speed
+        aq["pitchScale"]        = 0.0
+        aq["intonationScale"]   = 1.0
+        aq["volumeScale"]       = 1.0
+        aq["prePhonemeLength"]  = 0.0
+        aq["postPhonemeLength"] = post
+        aq["pauseLength"]       = None
+        aq["pauseLengthScale"]  = 1.0
+        wav_bytes = voicevox_synthesis(aq, style_id)
+        return aq, wav_bytes
+
+    # ── イントロ行: Frame=0 から連続配置
+    current_frame = 0
+    for idx, (speaker, text, se) in enumerate(intro_rows):
         char_key = speaker.strip()
         if char_key not in CHARACTER_MAP:
             print(f"  [警告] 未知の話者「{char_key}」をスキップします")
             continue
-
         char_info = CHARACTER_MAP[char_key]
-        style_id = char_info["style_id"]
-        speed = char_info["speed_scale"]
-        post = char_info["post_phoneme_length"]
-
-        # プロトタイプを探す（同名のymmp_nameでマッチ）
-        proto_key = char_info["ymmp_name"].strip()
-        proto = proto_voice.get(proto_key)
-        if proto is None:
-            layer = char_info["layer"]
-            for pk, pv in proto_voice.items():
-                if pv.get("Layer") == layer:
-                    proto = pv
-                    break
-        if proto is None:
-            proto = next(iter(proto_voice.values()))
-
-        # VOICEVOX呼び出し
-        print(f"  [{idx+1}/{len(rows)}] {char_key}: {text[:20]}{'...' if len(text)>20 else ''}")
+        print(f"  [イントロ{idx+1}/{len(intro_rows)}] {char_key}: {text[:20]}{'...' if len(text)>20 else ''}")
         try:
-            aq = voicevox_audio_query(text, style_id)
-            aq["speedScale"] = speed
-            aq["pitchScale"] = 0.0
-            aq["intonationScale"] = 1.0
-            aq["volumeScale"] = 1.0
-            aq["prePhonemeLength"] = 0.0
-            aq["postPhonemeLength"] = post
-            aq["pauseLength"] = None
-            aq["pauseLengthScale"] = 1.0
-
-            wav_bytes = voicevox_synthesis(aq, style_id)
+            aq, wav_bytes = _synth(char_key, char_info, text)
         except Exception as e:
             raise RuntimeError(f"VOICEVOX APIエラー（{char_key}: {text[:20]}）: {e}")
-
         voice_item, length_frames = build_voice_item(
-            proto, char_info, text, aq, wav_bytes, current_frame
+            _get_proto(char_info), char_info, text, aq, wav_bytes, current_frame
         )
         new_items.append(voice_item)
         voice_records.append((current_frame, length_frames, speaker, text))
         current_frame += length_frames
 
-        # SE挿入
-        if se in ("SE1", "SE2"):
+    # ── 本文行: Frame=524 以降（イントロが長ければその後）
+    current_frame = max(524, current_frame)
+    prev_se = None
+    for idx, (speaker, text, se) in enumerate(body_rows):
+        char_key = speaker.strip()
+        if char_key not in CHARACTER_MAP:
+            print(f"  [警告] 未知の話者「{char_key}」をスキップします")
+            continue
+        char_info = CHARACTER_MAP[char_key]
+        print(f"  [{idx+1}/{len(body_rows)}] {char_key}: {text[:20]}{'...' if len(text)>20 else ''}")
+        try:
+            aq, wav_bytes = _synth(char_key, char_info, text)
+        except Exception as e:
+            raise RuntimeError(f"VOICEVOX APIエラー（{char_key}: {text[:20]}）: {e}")
+        voice_item, length_frames = build_voice_item(
+            _get_proto(char_info), char_info, text, aq, wav_bytes, current_frame
+        )
+        new_items.append(voice_item)
+        voice_records.append((current_frame, length_frames, speaker, text))
+        current_frame += length_frames
+
+        # SE挿入: ブロック切り替え時（SE値が変わった瞬間）のみ
+        if se in ("SE1", "SE2") and se != prev_se and prev_se is not None:
             se_num = 1 if se == "SE1" else 2
             if proto_audio is not None:
                 se_item = build_se_item(proto_audio, se_num, current_frame)
                 new_items.append(se_item)
             current_frame += config["se_length"]
+        if se in ("SE1", "SE2"):
+            prev_se = se
 
     # ── 5. タイムライン更新（一旦VoiceItemのみで出力フォルダを確定）
     tsv_basename = os.path.basename(tsv_path)
