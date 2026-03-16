@@ -267,11 +267,10 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     vp["PostPhonemeLength"] = char_info["post_phoneme_length"]
     item["VoiceParameter"] = vp
 
-    # 位置・長さ・折り返し
+    # 位置・長さ
     item["Frame"] = frame
     item["Layer"] = char_info["layer"]
     item["Length"] = length_frames
-    item["WordWrap"] = "Wrap"   # テンプレートのNoWrapを上書きして字幕折り返しを有効化
 
     return item, length_frames
 
@@ -1014,9 +1013,9 @@ def process_tsv(tsv_path: str) -> None:
     with open(out_path, "w", encoding="utf-8-sig") as f:
         json.dump(ymmp, f, ensure_ascii=False, separators=(",", ":"))
 
-    # ── 8. TSVを _done にリネーム
+    # ── 8. TSVを _done にリネーム（既存ファイルがあっても上書き）
     done_path = re.sub(r"\.tsv$", "_done.tsv", tsv_path, flags=re.IGNORECASE)
-    os.rename(tsv_path, done_path)
+    os.replace(tsv_path, done_path)
 
     print(f"  [完了] 処理済み: {os.path.basename(done_path)}")
     print(f"         出力: {out_path}")
