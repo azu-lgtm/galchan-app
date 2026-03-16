@@ -280,6 +280,10 @@ def _wrap_serif(text: str) -> str:
         if ch in _SERIF_BREAK_CHARS and len(current) >= _SERIF_MAX_CHARS // 2:
             lines.append(current)
             current = ""
+        # 句読点がない長い文への強制折り返し
+        elif len(current) >= _SERIF_MAX_CHARS:
+            lines.append(current)
+            current = ""
     if current:
         lines.append(current)
     return "\n".join(lines) if lines else text
@@ -379,8 +383,19 @@ def gemini_generate_image_keywords(rows: list, api_key: str) -> list:
     req = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json"}, method="POST"
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode("utf-8"))
+    # 429 Too Many Requests に対してリトライ（最大3回、指数バックオフ）
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 2:
+                wait = 30 * (attempt + 1)
+                print(f"  [Gemini 429] {wait}秒待機してリトライ ({attempt+1}/3)...")
+                time.sleep(wait)
+            else:
+                raise
     raw = result["candidates"][0]["content"]["parts"][0]["text"].strip()
     keywords = [k.strip() for k in raw.split("\n") if k.strip()]
     # 行数を入力と合わせる
@@ -872,11 +887,11 @@ def process_tsv(tsv_path: str) -> None:
                 proto_image = item
                 break
 
-    # VoiceItem（Frame>=524のみ）とSE AudioItemを除いたベースアイテム
-    # ※イントロVoiceItem（Frame<524: ナレーション/タイトル/「それでは行ってみよう」）は残す
+    # 全VoiceItemとSE AudioItemを除いたベースアイテム
+    # ※テンプレートのVoiceItemはすべてプレースホルダーなので除去し、TSV内容に完全置換する
     base_items = [
         item for item in all_items
-        if not (item.get("$type") == voice_type and item.get("Frame", 0) >= 524)
+        if item.get("$type") != voice_type
         and not (item.get("$type") == audio_type
                  and ("セリフ切替SE" in item.get("FilePath", "")
                       or ("SE1" in item.get("FilePath", ""))
