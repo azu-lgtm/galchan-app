@@ -48,20 +48,32 @@ import urllib.error
 # ── .env 読み込み ──────────────────────────────────────────────────────────────
 
 def _load_dotenv() -> None:
-    """シンプルな.envローダー（stdlib）。既にos.environにある値は上書きしない"""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
-    if not os.path.exists(env_path):
-        return
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = val
+    """シンプルな.envローダー（stdlib）。既にos.environにある値は上書きしない。
+    ローカルパス系変数（YMMP_/OBSIDIAN_/VOICEVOX_/GALCHAN_）はハードコード済みのため
+    .env.local からは読み込まず、APIキー・IDのみ読み込む。"""
+    base = os.path.dirname(os.path.abspath(__file__))
+    # ローカルパス系変数は .env.local でのロードをスキップするプレフィックス
+    LOCAL_PATH_PREFIXES = ("YMMP_", "OBSIDIAN_", "VOICEVOX_", "GALCHAN_")
+
+    for filename in (".env", ".env.local"):
+        env_path = os.path.join(base, "..", filename)
+        if not os.path.exists(env_path):
+            continue
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if not key:
+                    continue
+                # .env.local のローカルパス系変数はスキップ
+                if filename == ".env.local" and any(key.startswith(p) for p in LOCAL_PATH_PREFIXES):
+                    continue
+                if key not in os.environ:
+                    os.environ[key] = val
 
 
 _load_dotenv()
@@ -253,6 +265,26 @@ def generate_lip_sync_frames(audio_query: dict) -> list:
 
 # ── ymmp 生成ヘルパー ──────────────────────────────────────────────────────────
 
+# YMM4字幕の1行あたり最大文字数（70px相当、約22文字で折り返し）
+_SERIF_MAX_CHARS = 22
+_SERIF_BREAK_CHARS = "。、！？!?…"
+
+def _wrap_serif(text: str) -> str:
+    """長い字幕テキストに改行を挿入してYMM4画面内に収める"""
+    if len(text) <= _SERIF_MAX_CHARS:
+        return text
+    lines = []
+    current = ""
+    for ch in text:
+        current += ch
+        if ch in _SERIF_BREAK_CHARS and len(current) >= _SERIF_MAX_CHARS // 2:
+            lines.append(current)
+            current = ""
+    if current:
+        lines.append(current)
+    return "\n".join(lines) if lines else text
+
+
 def build_voice_item(proto: dict, char_info: dict, text: str,
                      audio_query: dict, wav_bytes: bytes,
                      frame: int) -> dict:
@@ -285,8 +317,8 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     # LipSyncFrames（Pronounce内）をAudioQueryから生成（Noneだと音声が再生されない）
     item["Pronounce"]["LipSyncFrames"] = generate_lip_sync_frames(audio_query)
 
-    # VoiceCache = base64 WAV
-    item["VoiceCache"] = base64.b64encode(wav_bytes).decode("ascii")
+    # VoiceCache: YMM4は独自形式で保存するため、外部WAVは使わずnullにしてYMM4に再合成させる
+    item["VoiceCache"] = None
     item["VoiceLength"] = format_voice_length(duration)
     item["LipSyncFrames"] = None
 
@@ -298,8 +330,8 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     item["VoiceParameter"] = vp
 
     # 字幕テキスト・読み上げテキストを新しい内容で上書き
-    item["Serif"] = text      # 字幕として表示されるテキスト
-    item["Hatsuon"] = text    # 読み上げテキスト（音声合成のベース）
+    item["Serif"] = _wrap_serif(text)  # 字幕として表示されるテキスト（長い場合は折り返し）
+    item["Hatsuon"] = text             # 読み上げテキスト（音声合成のベース・折り返しなし）
 
     # 位置・長さ
     item["Frame"] = frame
@@ -1007,19 +1039,27 @@ def process_tsv(tsv_path: str) -> None:
     content_end = current_frame
     video_type = "YukkuriMovieMaker.Project.Items.VideoItem, YukkuriMovieMaker"
 
-    # バブル背景VideoItem と エンディングVideoItemを特定
+    image_type = "YukkuriMovieMaker.Project.Items.ImageItem, YukkuriMovieMaker"
+    # テンプレートのエンディング開始フレーム（本文VoiceItemの終端がここに設定されている）
+    TMPL_ENDING_FRAME = 1845
+
+    # バブル背景VideoItem・エンディングVideoItem・エンディングImageItemを特定
     bg_bubble = None
     ending_video = None
+    ending_images = []
     for item in base_items:
-        if item.get("$type") == video_type:
+        item_type = item.get("$type")
+        fr = item.get("Frame", 0)
+        if item_type == video_type:
             fp = item.get("FilePath", "")
-            fr = item.get("Frame", 0)
             if "バブル" in fp or fr == 524:
                 if bg_bubble is None:
                     bg_bubble = item
-            elif fr >= 1845:
+            elif fr >= TMPL_ENDING_FRAME:
                 if ending_video is None:
                     ending_video = item
+        elif item_type == image_type and fr >= TMPL_ENDING_FRAME:
+            ending_images.append(item)
 
     # バブル背景をタイリングしてcontent_endまで延長
     if bg_bubble is not None:
@@ -1038,6 +1078,11 @@ def process_tsv(tsv_path: str) -> None:
     if ending_video is not None:
         ending_length = ending_video.get("Length", 904)
         ending_video["Frame"] = content_end
+
+    # エンディングImageItemもコンテンツ終端に移動（各アイテムの相対オフセットを保持）
+    for img in ending_images:
+        offset = img.get("Frame", TMPL_ENDING_FRAME) - TMPL_ENDING_FRAME
+        img["Frame"] = content_end + offset
 
     # ── 8. タイムライン更新・保存
     timeline["Items"] = base_items + new_items + image_items

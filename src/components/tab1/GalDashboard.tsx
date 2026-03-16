@@ -122,6 +122,13 @@ export default function GalDashboard({ onTopicsReady, onResumeTopics }: Props) {
       <Button onClick={handleGenerate} className="w-full" size="lg">
         ✨ ネタ候補を自動取得する（計15件）
       </Button>
+
+      <button
+        onClick={() => onTopicsReady({ galchan: [], trends: [], competitors: [] })}
+        className="w-full text-sm text-text-secondary hover:text-accent py-1 transition-colors"
+      >
+        ✏️ テーマを手動で入力して台本を作る
+      </button>
     </div>
   )
 }

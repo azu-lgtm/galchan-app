@@ -14,28 +14,22 @@ import { dropboxUpload, isDropboxAvailable } from '@/lib/dropbox'
 
 export const runtime = 'nodejs'
 
-// ── SE除外話者（ナレーション・タイトルはSE不要）────────────────────────────
+// ── SE除外話者 ────────────────────────────────────────────────────────────────
 const NO_SE_SPEAKERS = new Set(['ナレーション', 'タイトル'])
-const SE_INTERVAL = 10 // 8〜12発言ごとに1回（中央値10を使用）
+const SE_INTERVAL = 10
 
-// ── TSV用SE列生成 ─────────────────────────────────────────────────────────────
-/**
- * 台本テキストを4列TSVに変換する
- * 列構成: 話者 / 本文 / 空欄 / SE
- * SEルール: ナレーション・タイトル以外の発言を10件ごとにSE1→SE2交互で挿入
- */
+// ── TSV変換（タブ区切り3列 → 4列 + SE自動挿入）────────────────────────────
 function scriptToTsv(script: string): string {
   const lines = script.split('\n').filter((l) => l.trim())
   const rows: string[] = []
-
-  let utteranceCount = 0  // SE対象発言カウンター
-  let seIndex = 0          // 0=SE1, 1=SE2
+  let utteranceCount = 0
+  let seIndex = 0
 
   for (const line of lines) {
-    const match = line.match(/^【(.+?)】(.+)$/)
-    if (!match) continue
-    const speaker = match[1].trim()
-    const text = match[2].trim()
+    const cols = line.split('\t')
+    if (cols.length < 2) continue
+    const speaker = cols[0].trim()
+    const text = cols[1].trim()
 
     let se = ''
     if (!NO_SE_SPEAKERS.has(speaker)) {
@@ -46,10 +40,8 @@ function scriptToTsv(script: string): string {
         utteranceCount = 0
       }
     }
-
     rows.push(`${speaker}\t${text}\t\t${se}`)
   }
-
   return rows.join('\n')
 }
 

@@ -15,6 +15,20 @@ interface Props {
   onReset: () => void
 }
 
+// TSV台本を読みやすい【話者】本文形式に変換（プレビュー表示用）
+function formatScriptForDisplay(script: string): string {
+  return script.split('\n').filter(l => l.trim()).map(line => {
+    const cols = line.split('\t')
+    if (cols.length >= 2) {
+      const speaker = cols[0].trim()
+      const text = cols[1].trim()
+      const se = cols[3]?.trim()
+      return se ? `【${speaker}】${text}  [${se}]` : `【${speaker}】${text}`
+    }
+    return line
+  }).join('\n')
+}
+
 function downloadText(content: string, filename: string, mimeType = 'text/plain') {
   const blob = new Blob([content], { type: `${mimeType};charset=utf-8` })
   const url = URL.createObjectURL(blob)
@@ -118,34 +132,28 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
   }
 
   const handleCsvOnly = () => {
-    // script から直接TSV生成（SE1/SE2交互ロジック）
+    // TSV（3列）にSE列を追加して4列にしてDL
     const NO_SE = new Set(['ナレーション', 'タイトル'])
     const SE_INTERVAL = 10
     let utteranceCount = 0
     let seIndex = 0
-
-    const lines = script.split('\n').filter((l) => l.trim())
-    const rows = lines
-      .map((line) => {
-        const m = line.match(/^【(.+?)】(.+)$/)
-        if (!m) return null
-        const speaker = m[1].trim()
-        const text = m[2].trim()
-        let se = ''
-        if (!NO_SE.has(speaker)) {
-          utteranceCount++
-          if (utteranceCount >= SE_INTERVAL) {
-            se = seIndex % 2 === 0 ? 'SE1' : 'SE2'
-            seIndex++
-            utteranceCount = 0
-          }
+    const rows = script.split('\n').filter(l => l.trim()).map(line => {
+      const cols = line.split('\t')
+      if (cols.length < 2) return null
+      const speaker = cols[0].trim()
+      const text = cols[1].trim()
+      let se = ''
+      if (!NO_SE.has(speaker)) {
+        utteranceCount++
+        if (utteranceCount >= SE_INTERVAL) {
+          se = seIndex % 2 === 0 ? 'SE1' : 'SE2'
+          seIndex++
+          utteranceCount = 0
         }
-        return `${speaker}\t${text}\t\t${se}`
-      })
-      .filter(Boolean)
-      .join('\n')
+      }
+      return `${speaker}\t${text}\t\t${se}`
+    }).filter(Boolean).join('\n')
 
-    // ファイル名: 【自ガルN台本】タイトル_YYYYMMDD.tsv
     const serial = materials?.serialNumber ?? '【自ガル0】'
     const scriptName = serial.replace('】', '台本】')
     const safeTitle = topic.title.replace(/[\\/:*?"<>|【】]/g, '').trim().slice(0, 40)
@@ -230,13 +238,13 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
           <div className="border-t border-border-soft px-4 pb-4">
             <div className="flex items-center justify-between mt-2 mb-2">
               {(() => {
-                // 【話者名】タグを除いた本文のみの文字数
+                // タブ区切り2列目（本文）の文字数合計
                 const spokenLen = script.split('\n').filter(l => l.trim()).reduce((sum, line) => {
-                  const m = line.match(/^【.+?】(.*)$/)
-                  return sum + (m ? m[1].trim().length : 0)
+                  const cols = line.split('\t')
+                  return sum + (cols.length >= 2 ? cols[1].trim().length : 0)
                 }, 0)
-                const ok = spokenLen >= 8400 && spokenLen <= 8600
-                const short = spokenLen < 8400
+                const ok = spokenLen >= 8600 && spokenLen <= 9000
+                const short = spokenLen < 8600
                 return (
                   <span className={`text-xs font-medium ${ok ? 'text-green-600' : short ? 'text-orange-500' : 'text-red-500'}`}>
                     {spokenLen.toLocaleString()}文字（本文のみ）
@@ -252,7 +260,7 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
               </button>
             </div>
             <pre className="text-xs text-text-primary whitespace-pre-wrap font-mono bg-base rounded-xl p-3 max-h-96 overflow-y-auto leading-relaxed">
-              {script}
+              {formatScriptForDisplay(script)}
             </pre>
           </div>
         )}
