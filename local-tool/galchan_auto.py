@@ -221,6 +221,36 @@ def format_voice_length(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}.{frac:07d}"
 
 
+def generate_lip_sync_frames(audio_query: dict) -> list:
+    """VOICEVOXのAudioQueryからYMM4用LipSyncFramesリストを生成する"""
+    vowel_map = {"a": "A", "i": "I", "u": "U", "e": "E", "o": "O"}
+    speed = audio_query.get("speedScale", 1.0) or 1.0
+
+    frames = [{"Time": "00:00:00", "Shape": "Silent"}]
+    t = 0.0
+
+    for phrase in audio_query.get("accent_phrases", []):
+        for mora in phrase.get("moras", []):
+            # 子音
+            c_len = (mora.get("consonant_length") or 0.0) / speed
+            if c_len > 0:
+                frames.append({"Time": format_voice_length(t), "Shape": "Silent"})
+                t += c_len
+            # 母音
+            v_len = (mora.get("vowel_length") or 0.0) / speed
+            shape = vowel_map.get(mora.get("vowel", ""), "Silent")
+            frames.append({"Time": format_voice_length(t), "Shape": shape})
+            t += v_len
+        # ポーズ
+        pm = phrase.get("pause_mora")
+        if pm:
+            frames.append({"Time": format_voice_length(t), "Shape": "Silent"})
+            t += (pm.get("vowel_length") or 0.0) / speed
+
+    frames.append({"Time": format_voice_length(t), "Shape": "Silent"})
+    return frames
+
+
 # ── ymmp 生成ヘルパー ──────────────────────────────────────────────────────────
 
 def build_voice_item(proto: dict, char_info: dict, text: str,
@@ -252,8 +282,8 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     aq["pauseLength"] = None
     aq["pauseLengthScale"] = 1.0
 
-    # LipSyncFrames（Pronounce内）はNoneに設定（自動再計算させる）
-    item["Pronounce"]["LipSyncFrames"] = None
+    # LipSyncFrames（Pronounce内）をAudioQueryから生成（Noneだと音声が再生されない）
+    item["Pronounce"]["LipSyncFrames"] = generate_lip_sync_frames(audio_query)
 
     # VoiceCache = base64 WAV
     item["VoiceCache"] = base64.b64encode(wav_bytes).decode("ascii")
