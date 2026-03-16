@@ -267,6 +267,10 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     vp["PostPhonemeLength"] = char_info["post_phoneme_length"]
     item["VoiceParameter"] = vp
 
+    # 字幕テキスト・読み上げテキストを新しい内容で上書き
+    item["Serif"] = text      # 字幕として表示されるテキスト
+    item["Hatsuon"] = text    # 読み上げテキスト（音声合成のベース）
+
     # 位置・長さ
     item["Frame"] = frame
     item["Layer"] = char_info["layer"]
