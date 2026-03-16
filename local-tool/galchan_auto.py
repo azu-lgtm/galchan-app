@@ -93,7 +93,7 @@ config = {
     # ── 画像自動生成設定 ─────────────────────────────────────────
     # GEMINI_API_KEY が設定されていれば自動的に有効になる
     "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
-    "image_layer": 1,      # 背景レイヤー
+    "image_layer": 2,      # キャラ手前・字幕背後レイヤー（Layer=1は背景VideoItemと重複するため2を使用）
     "image_zoom": 80.0,    # 表示サイズ（%）
     "image_x": 300.0,      # X位置（中心からのオフセット、右寄り）
     "image_y": 50.0,       # Y位置（中心からのオフセット）
@@ -267,10 +267,11 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     vp["PostPhonemeLength"] = char_info["post_phoneme_length"]
     item["VoiceParameter"] = vp
 
-    # 位置・長さ
+    # 位置・長さ・折り返し
     item["Frame"] = frame
     item["Layer"] = char_info["layer"]
     item["Length"] = length_frames
+    item["WordWrap"] = "Wrap"   # テンプレートのNoWrapを上書きして字幕折り返しを有効化
 
     return item, length_frames
 
@@ -793,10 +794,11 @@ def process_tsv(tsv_path: str) -> None:
                 proto_audio = item
                 break
 
-    # プロトタイプImageItemを抽出（Layer=1 の背景画像を優先）
+    # プロトタイプImageItemを抽出（Layer=2 のキャラ画像を優先）
+    # ※ image_layer=2 に合わせてLayer=2を優先。なければ任意のImageItemを使用
     proto_image = None
     for item in all_items:
-        if item.get("$type") == image_type and item.get("Layer") == 1:
+        if item.get("$type") == image_type and item.get("Layer") == 2:
             proto_image = item
             break
     if proto_image is None:
@@ -805,10 +807,11 @@ def process_tsv(tsv_path: str) -> None:
                 proto_image = item
                 break
 
-    # VoiceItemとSE AudioItemを除いたベースアイテム
+    # VoiceItem（Frame>=524のみ）とSE AudioItemを除いたベースアイテム
+    # ※イントロVoiceItem（Frame<524: ナレーション/タイトル/「それでは行ってみよう」）は残す
     base_items = [
         item for item in all_items
-        if item.get("$type") != voice_type
+        if not (item.get("$type") == voice_type and item.get("Frame", 0) >= 524)
         and not (item.get("$type") == audio_type
                  and ("セリフ切替SE" in item.get("FilePath", "")
                       or ("SE1" in item.get("FilePath", ""))
@@ -819,7 +822,7 @@ def process_tsv(tsv_path: str) -> None:
     print(f"  音声生成中... ({len(rows)}行)")
     new_items = []
     voice_records = []   # (start_frame, length_frames, speaker, text)
-    current_frame = 0
+    current_frame = 524  # イントロ終了後（Frame=524）から本文配置を開始
 
     for idx, (speaker, text, se) in enumerate(rows):
         char_key = speaker.strip()
@@ -966,9 +969,46 @@ def process_tsv(tsv_path: str) -> None:
     elif proto_image is None:
         print("  [画像スキップ] テンプレートにImageItemが見つかりません")
 
-    # ── 7. タイムライン更新・保存
+    # ── 7. 背景ビデオ延長・エンディング移動
+    # コンテンツ終端フレーム（VoiceItem配置後）
+    content_end = current_frame
+    video_type = "YukkuriMovieMaker.Project.Items.VideoItem, YukkuriMovieMaker"
+
+    # バブル背景VideoItem と エンディングVideoItemを特定
+    bg_bubble = None
+    ending_video = None
+    for item in base_items:
+        if item.get("$type") == video_type:
+            fp = item.get("FilePath", "")
+            fr = item.get("Frame", 0)
+            if "バブル" in fp or fr == 524:
+                if bg_bubble is None:
+                    bg_bubble = item
+            elif fr >= 1845:
+                if ending_video is None:
+                    ending_video = item
+
+    # バブル背景をタイリングしてcontent_endまで延長
+    if bg_bubble is not None:
+        tile_length = bg_bubble.get("Length", 1321)
+        tile_start = bg_bubble.get("Frame", 524)
+        next_frame = tile_start + tile_length
+        while next_frame < content_end:
+            new_tile = copy.deepcopy(bg_bubble)
+            new_tile["Frame"] = next_frame
+            new_tile["Length"] = min(tile_length, content_end - next_frame + tile_length)
+            base_items.append(new_tile)
+            next_frame += tile_length
+
+    # エンディングVideoItemをコンテンツ終端に移動
+    ending_length = 904  # デフォルト値
+    if ending_video is not None:
+        ending_length = ending_video.get("Length", 904)
+        ending_video["Frame"] = content_end
+
+    # ── 8. タイムライン更新・保存
     timeline["Items"] = base_items + new_items + image_items
-    timeline["Length"] = max(current_frame, timeline.get("Length", 0))
+    timeline["Length"] = content_end + ending_length
 
     print(f"  ymmp保存中... → {out_path}")
     with open(out_path, "w", encoding="utf-8-sig") as f:
