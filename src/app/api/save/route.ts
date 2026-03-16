@@ -18,7 +18,19 @@ export const runtime = 'nodejs'
 const NO_SE_SPEAKERS = new Set(['ナレーション', 'タイトル'])
 const SE_INTERVAL = 10
 
-// ── TSV変換（タブ区切り3列 → 4列 + SE自動挿入）────────────────────────────
+// ── いらすとや検索キーワード抽出（API不要・シンプルルールベース）──────────────
+function extractImageKeyword(speaker: string, text: string): string {
+  if (NO_SE_SPEAKERS.has(speaker)) return '' // ナレーション/タイトルは画像なし
+  // 2〜4字の漢字熟語を優先（いらすとや検索に適した名詞）
+  const kanjiMatch = text.match(/[\u4e00-\u9fa5]{2,4}/)
+  if (kanjiMatch) return kanjiMatch[0]
+  // カタカナ語（2〜6字）
+  const kataMatch = text.match(/[\u30a1-\u30f6]{2,6}/)
+  if (kataMatch) return kataMatch[0]
+  return ''
+}
+
+// ── TSV変換（タブ区切り → 5列: 話者/本文/空欄/SE/キーワード）───────────────
 function scriptToTsv(script: string): string {
   const lines = script.split('\n').filter((l) => l.trim())
   const rows: string[] = []
@@ -40,7 +52,8 @@ function scriptToTsv(script: string): string {
         utteranceCount = 0
       }
     }
-    rows.push(`${speaker}\t${text}\t\t${se}`)
+    const keyword = extractImageKeyword(speaker, text)
+    rows.push(`${speaker}\t${text}\t\t${se}\t${keyword}`)
   }
   return rows.join('\n')
 }

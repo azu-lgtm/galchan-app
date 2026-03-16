@@ -808,8 +808,9 @@ def build_image_item(proto_image: dict, file_path: str, frame: int, length: int)
 
 def read_tsv(tsv_path: str) -> list:
     """
-    TSVを読み込んで (speaker, text, se) のリストを返す
+    TSVを読み込んで (speaker, text, se, keyword) のリストを返す
     se は "" / "SE1" / "SE2"
+    keyword は列5（省略可）: いらすとや検索キーワード
     """
     rows = []
     with open(tsv_path, "r", encoding="utf-8-sig") as f:
@@ -821,8 +822,9 @@ def read_tsv(tsv_path: str) -> list:
             speaker = parts[0].strip() if len(parts) > 0 else ""
             text    = parts[1].strip() if len(parts) > 1 else ""
             se      = parts[3].strip() if len(parts) > 3 else ""
+            keyword = parts[4].strip() if len(parts) > 4 else ""
             if speaker and text:
-                rows.append((speaker, text, se))
+                rows.append((speaker, text, se, keyword))
     return rows
 
 
@@ -898,6 +900,27 @@ def process_tsv(tsv_path: str) -> None:
                       or ("SE2" in item.get("FilePath", ""))))
     ]
 
+    # イントロ同期のためテンプレートの特殊アイテムを特定
+    TMPL_TRANSITION_FRAME = 461  # テンプレートのトランジション開始フレーム
+    TMPL_TRANSITION_LEN   = 63   # トランジション長さ（フレーム）
+    TMPL_BODY_FRAME       = 524  # バブル背景の開始フレーム
+    intro_bg_video   = None  # Frame=0 の VideoItem（冒頭背景動画）
+    intro_title_img  = None  # Frame=0 の ImageItem（タイトル画像）
+    transition_items = []    # Frame=461 のアイテム（SE・画像トランジション）
+    bubble_bg_item   = None  # Frame=524 の VideoItem（バブル背景）
+    for item in base_items:
+        fr = item.get("Frame", -1)
+        t  = item.get("$type", "")
+        if fr == 0:
+            if "VideoItem" in t and intro_bg_video is None:
+                intro_bg_video = item
+            elif "ImageItem" in t and intro_title_img is None:
+                intro_title_img = item
+        elif fr == TMPL_TRANSITION_FRAME:
+            transition_items.append(item)
+        elif fr == TMPL_BODY_FRAME and "VideoItem" in t and bubble_bg_item is None:
+            bubble_bg_item = item
+
     # ── 4. 各行のVoiceItem生成
     # イントロ行（ナレーション/タイトル）と本文行に分離
     INTRO_SPEAKERS = {"ナレーション", "タイトル"}
@@ -914,7 +937,7 @@ def process_tsv(tsv_path: str) -> None:
 
     print(f"  音声生成中... ({len(rows)}行 = イントロ{len(intro_rows)}行 + 本文{len(body_rows)}行)")
     new_items = []
-    voice_records = []   # (start_frame, length_frames, speaker, text)
+    voice_records = []   # (start_frame, length_frames, speaker, text, keyword)
 
     def _get_proto(char_info):
         proto_key = char_info["ymmp_name"].strip()
@@ -944,7 +967,7 @@ def process_tsv(tsv_path: str) -> None:
 
     # ── イントロ行: Frame=0 から連続配置
     current_frame = 0
-    for idx, (speaker, text, se) in enumerate(intro_rows):
+    for idx, (speaker, text, se, keyword) in enumerate(intro_rows):
         char_key = speaker.strip()
         if char_key not in CHARACTER_MAP:
             print(f"  [警告] 未知の話者「{char_key}」をスキップします")
@@ -959,13 +982,42 @@ def process_tsv(tsv_path: str) -> None:
             _get_proto(char_info), char_info, text, aq, wav_bytes, current_frame
         )
         new_items.append(voice_item)
-        voice_records.append((current_frame, length_frames, speaker, text))
+        voice_records.append((current_frame, length_frames, speaker, text, keyword))
         current_frame += length_frames
 
-    # ── 本文行: Frame=524 以降（イントロが長ければその後）
-    current_frame = max(524, current_frame)
-    prev_se = None
-    for idx, (speaker, text, se) in enumerate(body_rows):
+    # ── イントロ終了後: 冒頭背景・タイトル画像・トランジションをイントロ長に合わせて調整
+    intro_end = current_frame
+    transition_start = max(intro_end, TMPL_TRANSITION_FRAME)
+    body_start_frame = transition_start + TMPL_TRANSITION_LEN
+
+    # タイトル画像（Frame=0のImageItem）を intro_end まで延長
+    if intro_title_img is not None:
+        intro_title_img["Length"] = transition_start
+
+    # 冒頭背景動画（Frame=0のVideoItem）が短ければタイリングで延長
+    if intro_bg_video is not None and transition_start > TMPL_TRANSITION_FRAME:
+        orig_len = intro_bg_video.get("Length", TMPL_TRANSITION_FRAME)
+        next_f = orig_len
+        tiles_to_add = []
+        while next_f < transition_start:
+            tile = copy.deepcopy(intro_bg_video)
+            tile["Frame"] = next_f
+            tile["Length"] = min(orig_len, transition_start - next_f)
+            tiles_to_add.append(tile)
+            next_f += orig_len
+        base_items.extend(tiles_to_add)
+
+    # トランジション（Frame=461のアイテム）をイントロ終端に移動
+    for item in transition_items:
+        item["Frame"] = transition_start
+
+    # バブル背景（Frame=524のVideoItem）をトランジション直後に移動
+    if bubble_bg_item is not None:
+        bubble_bg_item["Frame"] = body_start_frame
+
+    # ── 本文行: トランジション直後から配置
+    current_frame = max(body_start_frame, TMPL_BODY_FRAME)
+    for idx, (speaker, text, se, keyword) in enumerate(body_rows):
         char_key = speaker.strip()
         if char_key not in CHARACTER_MAP:
             print(f"  [警告] 未知の話者「{char_key}」をスキップします")
@@ -980,18 +1032,16 @@ def process_tsv(tsv_path: str) -> None:
             _get_proto(char_info), char_info, text, aq, wav_bytes, current_frame
         )
         new_items.append(voice_item)
-        voice_records.append((current_frame, length_frames, speaker, text))
+        voice_records.append((current_frame, length_frames, speaker, text, keyword))
         current_frame += length_frames
 
-        # SE挿入: ブロック切り替え時（SE値が変わった瞬間）のみ
-        if se in ("SE1", "SE2") and se != prev_se and prev_se is not None:
+        # SE挿入: TSVのSE列が非空の行でのみ（Webアプリは10行ごとに1回付与）
+        if se in ("SE1", "SE2"):
             se_num = 1 if se == "SE1" else 2
             if proto_audio is not None:
                 se_item = build_se_item(proto_audio, se_num, current_frame)
                 new_items.append(se_item)
             current_frame += config["se_length"]
-        if se in ("SE1", "SE2"):
-            prev_se = se
 
     # ── 5. タイムライン更新（一旦VoiceItemのみで出力フォルダを確定）
     tsv_basename = os.path.basename(tsv_path)
@@ -1003,83 +1053,50 @@ def process_tsv(tsv_path: str) -> None:
     os.makedirs(out_folder, exist_ok=True)
     out_path = os.path.join(out_folder, f"{stem}.ymmp")
 
-    # ── 6. 画像自動挿入（GEMINI_API_KEY が設定されていて、プロトImageItemがある場合）
+    # ── 6. 画像挿入（TSVのキーワード列を使用。なければスキップ）
     image_items = []
-    gemini_key = config.get("gemini_api_key", "")
-    if gemini_key and proto_image is not None and voice_records:
-        print(f"  画像キーワード生成中... (Gemini API, {len(voice_records)}件)")
+    has_keywords = any(kw for _, _, spk, _, kw in voice_records if kw)
+    if has_keywords and proto_image is not None:
         try:
-            rows_for_kw = [(spk, txt, "") for _, _, spk, txt in voice_records]
-            keywords = gemini_generate_image_keywords(rows_for_kw, gemini_key)
-
             images_dir = os.path.join(out_folder, config["image_folder_name"])
             os.makedirs(images_dir, exist_ok=True)
 
-            # ── 商品リスト読み込み（Sheets API）
-            product_list = []
-            g_client_id     = config.get("google_client_id", "")
-            g_client_secret = config.get("google_client_secret", "")
-            g_refresh       = config.get("google_refresh_token", "")
-            sheets_id       = config.get("spreadsheet_id", "")
-            if sheets_id and g_client_id and g_client_secret and g_refresh:
-                try:
-                    print("  商品リスト読み込み中 (Google Sheets)...")
-                    access_token = google_get_access_token(g_client_id, g_client_secret, g_refresh)
-                    product_list = sheets_read_product_list(
-                        sheets_id, config["product_sheet_name"], access_token
-                    )
-                    if product_list:
-                        print(f"  商品リスト: {len(product_list)}件 "
-                              f"({', '.join(n for n, _ in product_list[:3])}{'...' if len(product_list)>3 else ''})")
-                    else:
-                        print("  商品リスト: 0件（このスクリプトに商品なし）")
-                except Exception as e:
-                    print(f"  [商品リスト取得失敗] {e} → いらすとやのみで続行")
+            # TSVのキーワード列からリスト化（voice_recordsと同順）
+            keywords_from_tsv = [kw for _, _, _, _, kw in voice_records]
 
-            # イラストAC リンク集 HTML を生成（キーワード確定後すぐ）
+            # イラストAC リンク集 HTML を生成
             ac_html_path = os.path.join(out_folder, "イラストACリンク集.html")
-            generate_ac_links_html(voice_records, keywords, ac_html_path)
+            generate_ac_links_html(voice_records, keywords_from_tsv, ac_html_path)
             print(f"  リンク集生成: {ac_html_path}")
 
             img_cache = {}  # key → local path (None = DL失敗 or スキップ)
             max_images = config.get("image_max", 20)
             dl_count = 0   # いらすとやのダウンロード済み枚数
 
-            for i, (frame, length, speaker, text) in enumerate(voice_records):
-                kw = keywords[i]
+            for i, (frame, length, speaker, text, kw) in enumerate(voice_records):
+                if not kw:
+                    continue  # キーワードなし（ナレーション等）はスキップ
 
-                # ── 商品マッチング確認
-                matched = find_product_in_text(text, product_list)
-                if matched:
-                    p_name, p_link = matched
-                    cache_key = f"__amz__{p_name}"
-                    if cache_key not in img_cache:
-                        print(f"  [{i+1}/{len(voice_records)}] 商品画像: 「{p_name}」")
-                        img_cache[cache_key] = amazon_image_download(p_link, images_dir, p_name)
-                    img_path = img_cache.get(cache_key)
-                else:
-                    # ── いらすとや（従来通り）
-                    if kw not in img_cache:
-                        if dl_count >= max_images:
-                            print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
-                            img_cache[kw] = None
-                        else:
-                            print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
-                            img_cache[kw] = irasutoya_download(kw, images_dir)
-                            if img_cache[kw]:
-                                dl_count += 1
-                    img_path = img_cache.get(kw)
+                # ── いらすとや
+                if kw not in img_cache:
+                    if dl_count >= max_images:
+                        print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
+                        img_cache[kw] = None
+                    else:
+                        print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
+                        img_cache[kw] = irasutoya_download(kw, images_dir)
+                        if img_cache[kw]:
+                            dl_count += 1
+                img_path = img_cache.get(kw)
 
                 if img_path and os.path.exists(img_path):
                     img_item = build_image_item(proto_image, img_path, frame, length)
                     image_items.append(img_item)
 
-            print(f"  画像挿入: {len(image_items)}件 (Amazon商品画像 + いらすとや)")
+            print(f"  画像挿入: {len(image_items)}件 (いらすとや)")
         except Exception as e:
-            print(f"  [画像生成スキップ] エラーが発生しました: {e}")
+            print(f"  [画像スキップ] エラーが発生しました: {e}")
             traceback.print_exc()
-    elif not gemini_key:
-        print("  [画像スキップ] GEMINI_API_KEY が設定されていません")
     elif proto_image is None:
         print("  [画像スキップ] テンプレートにImageItemが見つかりません")
 
@@ -1093,7 +1110,8 @@ def process_tsv(tsv_path: str) -> None:
     TMPL_ENDING_FRAME = 1845
 
     # バブル背景VideoItem・エンディングVideoItem・エンディングImageItemを特定
-    bg_bubble = None
+    # ※バブル背景はイントロ調整でFrameが変わっている可能性があるため bubble_bg_item を優先使用
+    bg_bubble = bubble_bg_item  # イントロ調整済みのバブル背景参照を使用
     ending_video = None
     ending_images = []
     for item in base_items:
@@ -1101,9 +1119,8 @@ def process_tsv(tsv_path: str) -> None:
         fr = item.get("Frame", 0)
         if item_type == video_type:
             fp = item.get("FilePath", "")
-            if "バブル" in fp or fr == 524:
-                if bg_bubble is None:
-                    bg_bubble = item
+            if bg_bubble is None and ("バブル" in fp):
+                bg_bubble = item
             elif fr >= TMPL_ENDING_FRAME:
                 if ending_video is None:
                     ending_video = item
