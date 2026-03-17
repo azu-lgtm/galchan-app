@@ -8,7 +8,7 @@ function repairJson(s: string): string {
 /** テキストから最後のJSONオブジェクトを抽出する（思考モデルのchain-of-thought対応） */
 function extractJsonObject(text: string): string | null {
   // コードブロックをすべて抽出し、JSONとして解析できる最後のものを使う
-  const fenceMatches = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/g)]
+  const fenceMatches = Array.from(text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/g))
   for (let i = fenceMatches.length - 1; i >= 0; i--) {
     const candidate = fenceMatches[i][1].trim()
     if (candidate.startsWith('{')) return repairJson(candidate)
