@@ -236,29 +236,40 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
         </button>
         {scriptOpen && (
           <div className="border-t border-border-soft px-4 pb-4">
-            <div className="flex items-center justify-between mt-2 mb-2">
-              {(() => {
-                // タブ区切り2列目（本文）の文字数合計
-                const spokenLen = script.split('\n').filter(l => l.trim()).reduce((sum, line) => {
-                  const cols = line.split('\t')
-                  return sum + (cols.length >= 2 ? cols[1].trim().length : 0)
-                }, 0)
-                const ok = spokenLen >= 8600 && spokenLen <= 9000
-                const short = spokenLen < 8600
-                return (
+            {(() => {
+              const spokenLen = script.split('\n').filter(l => l.trim()).reduce((sum, line) => {
+                const cols = line.split('\t')
+                return sum + (cols.length >= 2 ? cols[1].trim().length : 0)
+              }, 0)
+              const ok = spokenLen >= 8600 && spokenLen <= 9000
+              const short = spokenLen < 8600
+              return (
+                <div className="flex items-center justify-between mt-2 mb-2">
                   <span className={`text-xs font-medium ${ok ? 'text-green-600' : short ? 'text-orange-500' : 'text-red-500'}`}>
                     {spokenLen.toLocaleString()}文字（本文のみ）
                     {ok ? ' ✓' : short ? ' (不足)' : ' (超過)'}
+                    {short && (
+                      <button
+                        onClick={() => {
+                          const shortage = 8600 - spokenLen
+                          setRegenInstruction(`現在${spokenLen.toLocaleString()}字（目標8600字まで${shortage}字不足）。スレ民のセリフを追加して8600字以上にして。`)
+                          setRegenOpen(true)
+                        }}
+                        className="ml-2 underline hover:no-underline"
+                      >
+                        → 追加する
+                      </button>
+                    )}
                   </span>
-                )
-              })()}
-              <button
-                onClick={() => copy(script, 'script')}
-                className="text-xs text-accent hover:text-accent-dark"
-              >
-                {copied === 'script' ? '✓ コピー済み' : 'コピー'}
-              </button>
-            </div>
+                  <button
+                    onClick={() => copy(script, 'script')}
+                    className="text-xs text-accent hover:text-accent-dark"
+                  >
+                    {copied === 'script' ? '✓ コピー済み' : 'コピー'}
+                  </button>
+                </div>
+              )
+            })()}
             <pre className="text-xs text-text-primary whitespace-pre-wrap font-mono bg-base rounded-xl p-3 max-h-96 overflow-y-auto leading-relaxed">
               {formatScriptForDisplay(script)}
             </pre>
@@ -280,7 +291,7 @@ export default function GalScriptResult({ script: initialScript, topic, style, o
             <textarea
               value={regenInstruction}
               onChange={e => setRegenInstruction(e.target.value)}
-              placeholder="例: もっと感情的な言葉を増やして。スレ民のセリフを3つ追加して8500字に近づけて。オープニングを短くして。"
+              placeholder="例: スレ民のセリフを5〜8個追加して8600字以上にして。オープニングを短くして。イッチのセリフをもっと感情的にして。"
               rows={3}
               className="w-full text-sm border border-border-soft rounded-xl px-3 py-2 bg-base focus:outline-none focus:border-accent resize-none"
             />

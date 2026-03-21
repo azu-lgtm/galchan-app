@@ -3,7 +3,7 @@
  * - idea.md     : Obsidian ネタ保存
  * - script.txt  : Obsidian 台本保存
  * - materials.json : スプシ・動画管理連携データ
- * - csv.tsv     : YMM4連携（話者/本文/空欄/SE）
+ * - csv.tsv     : YMM4連携（A=話者 / B=本文 / C=SE）
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
@@ -18,19 +18,10 @@ export const runtime = 'nodejs'
 const NO_SE_SPEAKERS = new Set(['ナレーション', 'タイトル'])
 const SE_INTERVAL = 10
 
-// ── いらすとや検索キーワード抽出（API不要・シンプルルールベース）──────────────
-function extractImageKeyword(speaker: string, text: string): string {
-  if (NO_SE_SPEAKERS.has(speaker)) return '' // ナレーション/タイトルは画像なし
-  // 2〜4字の漢字熟語を優先（いらすとや検索に適した名詞）
-  const kanjiMatch = text.match(/[\u4e00-\u9fa5]{2,4}/)
-  if (kanjiMatch) return kanjiMatch[0]
-  // カタカナ語（2〜6字）
-  const kataMatch = text.match(/[\u30a1-\u30f6]{2,6}/)
-  if (kataMatch) return kataMatch[0]
-  return ''
-}
-
-// ── TSV変換（タブ区切り → 5列: 話者/本文/空欄/SE/キーワード）───────────────
+// ── TSV変換（タブ区切り → 3列: A=話者 / B=本文 / C=SE）─────────────────────
+// Gemini出力形式: 話者\t本文\t（3列目は空欄）
+// SE列は自動付与（ナレーション/タイトル以外の10発言ごとにSE1→SE2交互）
+// キーワード列は廃止（galchan_auto.pyでGemini APIが自動生成）
 function scriptToTsv(script: string): string {
   const lines = script.split('\n').filter((l) => l.trim())
   const rows: string[] = []
@@ -42,6 +33,7 @@ function scriptToTsv(script: string): string {
     if (cols.length < 2) continue
     const speaker = cols[0].trim()
     const text = cols[1].trim()
+    if (!speaker || !text) continue
 
     let se = ''
     if (!NO_SE_SPEAKERS.has(speaker)) {
@@ -52,8 +44,7 @@ function scriptToTsv(script: string): string {
         utteranceCount = 0
       }
     }
-    const keyword = extractImageKeyword(speaker, text)
-    rows.push(`${speaker}\t${text}\t\t${se}\t${keyword}`)
+    rows.push(`${speaker}\t${text}\t${se}`)
   }
   return rows.join('\n')
 }

@@ -40,6 +40,7 @@ import io
 import wave
 import math
 import re
+import random
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -105,12 +106,16 @@ config = {
     # ── 画像自動生成設定 ─────────────────────────────────────────
     # GEMINI_API_KEY が設定されていれば自動的に有効になる
     "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
-    "image_layer": 2,      # キャラ手前・字幕背後レイヤー（Layer=1は背景VideoItemと重複するため2を使用）
-    "image_zoom": 80.0,    # 表示サイズ（%）
-    "image_x": 300.0,      # X位置（中心からのオフセット、右寄り）
-    "image_y": 50.0,       # Y位置（中心からのオフセット）
+    "image_layer": 6,      # 外注版実測値: Layer6（Layer4はSE、Layer5はVoiceItem）
+    "image_zoom": 52.0,    # 表示サイズ（%）※外注版は約52%
+    "image_x": 630.0,      # X位置（右寄り）※外注版実測: 630.5
+    "image_y": 270.0,      # Y位置 ※外注版実測: 241〜291（中央値270）
     "image_folder_name": "使用画像",  # 画像保存サブフォルダ名
     "image_max": 20,       # いらすとや 最大使用枚数（マニュアル準拠）
+    "ac_enabled": False,   # イラストAC(なのなのな)DL: Falseでスキップ（フォルダ未整備時はFalse）
+    # ── メインキャラ画像設定 ─────────────────────────────────────────────────────
+    "main_chara_dir": r"E:\ガルyt\ガルちゃんYMM4テンプレート\動画内メインキャラ イラスト",
+    "main_chara_interval": 5,  # 本文何行に1回メインキャラ画像を挿入するか
     # ── Google Sheets 商品リスト設定 ─────────────────────────────────────────
     # .env から自動読み込み（GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET /
     # GOOGLE_REFRESH_TOKEN / SPREADSHEET_ID_GALCHAN）
@@ -140,52 +145,53 @@ CHARACTER_MAP = {
         "speed_scale": 1.15,
         "post_phoneme_length": 0.18,
         "ymmp_name": "タイトル ",
+        "serif_max_chars": 9,   # タイトルは大フォントなので短めで折り返し
     },
     "イッチ": {
         "style_id": 8,          # 春日部つむぎ ノーマル
-        "layer": 3,
+        "layer": 5,             # 外注版実測値: Layer5
         "speed_scale": 1.20,
         "post_phoneme_length": 0.12,
         "ymmp_name": "イッチ ",
     },
     "スレ民1": {
         "style_id": 20,         # もち子(cv 明日葉よもぎ) ノーマル
-        "layer": 3,
+        "layer": 5,             # 外注版実測値: Layer5
         "speed_scale": 1.10,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民1",
     },
     "スレ民2": {
         "style_id": 14,         # 冥鳴ひまり ノーマル
-        "layer": 3,
+        "layer": 6,             # 外注版実測値: Layer6
         "speed_scale": 1.18,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民2",
     },
     "スレ民3": {
         "style_id": 8,          # 春日部つむぎ
-        "layer": 3,
+        "layer": 5,             # 外注版実測値: Layer5
         "speed_scale": 1.15,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民3",
     },
     "スレ民4": {
         "style_id": 14,         # 冥鳴ひまり
-        "layer": 3,
+        "layer": 5,             # 外注版実測値: Layer5
         "speed_scale": 1.15,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民4",
     },
     "スレ民5": {
         "style_id": 20,         # もち子
-        "layer": 3,
+        "layer": 6,             # 外注版実測値: Layer6
         "speed_scale": 1.15,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民5",
     },
     "スレ民6": {
         "style_id": 8,          # 春日部つむぎ
-        "layer": 3,
+        "layer": 5,             # 外注版実測値: Layer5
         "speed_scale": 1.15,
         "post_phoneme_length": 0.12,
         "ymmp_name": "スレ民6",
@@ -265,23 +271,25 @@ def generate_lip_sync_frames(audio_query: dict) -> list:
 
 # ── ymmp 生成ヘルパー ──────────────────────────────────────────────────────────
 
-# YMM4字幕の1行あたり最大文字数（70px相当、約22文字で折り返し）
-_SERIF_MAX_CHARS = 22
+# YMM4字幕の1行あたり最大文字数（実測値に合わせて20文字で折り返し）
+_SERIF_MAX_CHARS = 20
 _SERIF_BREAK_CHARS = "。、！？!?…"
 
-def _wrap_serif(text: str) -> str:
+def _wrap_serif(text: str, max_chars: int = None) -> str:
     """長い字幕テキストに改行を挿入してYMM4画面内に収める"""
-    if len(text) <= _SERIF_MAX_CHARS:
+    if max_chars is None:
+        max_chars = _SERIF_MAX_CHARS
+    if len(text) <= max_chars:
         return text
     lines = []
     current = ""
     for ch in text:
         current += ch
-        if ch in _SERIF_BREAK_CHARS and len(current) >= _SERIF_MAX_CHARS // 2:
+        if ch in _SERIF_BREAK_CHARS and len(current) >= max_chars // 2:
             lines.append(current)
             current = ""
         # 句読点がない長い文への強制折り返し
-        elif len(current) >= _SERIF_MAX_CHARS:
+        elif len(current) >= max_chars:
             lines.append(current)
             current = ""
     if current:
@@ -334,8 +342,9 @@ def build_voice_item(proto: dict, char_info: dict, text: str,
     item["VoiceParameter"] = vp
 
     # 字幕テキスト・読み上げテキストを新しい内容で上書き
-    item["Serif"] = _wrap_serif(text)  # 字幕として表示されるテキスト（長い場合は折り返し）
-    item["Hatsuon"] = text             # 読み上げテキスト（音声合成のベース・折り返しなし）
+    serif_max = char_info.get("serif_max_chars", _SERIF_MAX_CHARS)
+    item["Serif"] = _wrap_serif(text, serif_max)  # 字幕として表示されるテキスト（長い場合は折り返し）
+    item["Hatsuon"] = text                         # 読み上げテキスト（音声合成のベース・折り返しなし）
 
     # 位置・長さ
     item["Frame"] = frame
@@ -413,7 +422,7 @@ def generate_ac_links_html(voice_records: list, keywords: list, out_path: str) -
     """
     # 重複キーワードを除去（順序保持）
     seen = {}
-    for i, (_, _, speaker, text) in enumerate(voice_records):
+    for i, (_, _, speaker, text, *_rest) in enumerate(voice_records):
         kw = keywords[i]
         if kw not in seen:
             seen[kw] = {"speaker": speaker, "text": text[:30], "lines": 1}
@@ -690,6 +699,76 @@ _IRASUTOYA_HEADERS = {
 }
 
 
+def ac_illust_nanononona_download(keyword: str, dest_dir: str) -> str | None:
+    """
+    イラストAC（なのなのな作家）を検索して最初の画像をダウンロードする。
+    失敗した場合は None を返す。
+    """
+    safe = re.sub(r'[\\/:*?"<>|]', '_', keyword)[:40]
+    prefix = "ac_"
+
+    # キャッシュ確認
+    for fname in os.listdir(dest_dir):
+        if fname.startswith(prefix) and os.path.splitext(fname)[0] == prefix + safe:
+            return os.path.join(dest_dir, fname)
+
+    search_url = (
+        f"https://www.ac-illust.com/main/search_result.php"
+        f"?search_word={urllib.parse.quote(keyword)}"
+        f"&sl=ja&creator=%E3%81%AA%E3%81%AE%E3%81%AA%E3%81%AE%E3%81%AA"
+        f"&srt=-releasedate&orientation=all&format=all"
+    )
+    headers = {
+        **_IRASUTOYA_HEADERS,
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "ja,en;q=0.9",
+        "Referer": "https://www.ac-illust.com/",
+    }
+    try:
+        req = urllib.request.Request(search_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        print(f"    [AC検索失敗] {keyword}: {e}")
+        return None
+
+    # CDNサムネURL抽出（ac-cdn.net）
+    matches = re.findall(
+        r'https://[^"\'>\s]*ac-cdn\.net/image/[^"\'>\s]+\.(?:png|jpg|gif|webp)',
+        html, re.IGNORECASE
+    )
+    if not matches:
+        # 別パターン試行
+        matches = re.findall(
+            r'//[^"\'>\s]*ac-cdn\.net/[^"\'>\s]+\.(?:png|jpg|gif|webp)',
+            html, re.IGNORECASE
+        )
+        if matches:
+            matches = ["https:" + m if m.startswith("//") else m for m in matches]
+
+    if not matches:
+        print(f"    [AC画像なし] 「{keyword}」: なのなのな作家の結果なし")
+        return None
+
+    img_url = matches[0]
+    ext = os.path.splitext(urllib.parse.urlparse(img_url).path)[-1] or ".png"
+    out_path = os.path.join(dest_dir, f"{prefix}{safe}{ext}")
+
+    try:
+        req2 = urllib.request.Request(img_url, headers={**headers, "Referer": search_url})
+        with urllib.request.urlopen(req2, timeout=15) as resp:
+            data = resp.read()
+        if len(data) < 500:
+            print(f"    [AC画像空] 「{keyword}」: レスポンスが小さすぎます")
+            return None
+        with open(out_path, "wb") as f:
+            f.write(data)
+        return out_path
+    except Exception as e:
+        print(f"    [AC画像DL失敗] 「{keyword}」: {e}")
+        return None
+
+
 def irasutoya_download(keyword: str, dest_dir: str) -> str | None:
     """
     いらすとやを検索して最初の画像をダウンロードし、ローカルパスを返す。
@@ -774,10 +853,10 @@ def _make_repeat_zoom_effect() -> dict:
     """RepeatZoomEffect（反復拡大縮小）エフェクトを生成する"""
     return {
         "$type": "YukkuriMovieMaker.Project.Effects.RepeatZoomEffect, YukkuriMovieMaker",
-        "Zoom": _make_anim_param(95.0),    # 95〜100% で繰り返しズーム
+        "Zoom": _make_anim_param(95.0),
         "ZoomX": _make_anim_param(100.0),
         "ZoomY": _make_anim_param(100.0),
-        "Span": _make_anim_param(2.0),     # 2秒周期
+        "Span": _make_anim_param(2.0),
         "EasingType": "Sine",
         "EasingMode": "InOut",
         "IsCentering": True,
@@ -786,10 +865,60 @@ def _make_repeat_zoom_effect() -> dict:
     }
 
 
-def build_image_item(proto_image: dict, file_path: str, frame: int, length: int) -> dict:
+def _make_repeat_rotate_effect() -> dict:
+    """RepeatRotateEffect（反復回転）エフェクトを生成する"""
+    return {
+        "$type": "YukkuriMovieMaker.Project.Effects.RepeatRotateEffect, YukkuriMovieMaker",
+        "Rotate": _make_anim_param(5.0),
+        "Span": _make_anim_param(2.0),
+        "EasingType": "Sine",
+        "EasingMode": "InOut",
+        "IsCentering": True,
+        "IsEnabled": True,
+        "Remark": "",
+    }
+
+
+def _make_repeat_move_effect() -> dict:
+    """RepeatMoveEffect（反復移動）エフェクトを生成する"""
+    return {
+        "$type": "YukkuriMovieMaker.Project.Effects.RepeatMoveEffect, YukkuriMovieMaker",
+        "X": _make_anim_param(10.0),
+        "Y": _make_anim_param(0.0),
+        "Span": _make_anim_param(2.0),
+        "EasingType": "Sine",
+        "EasingMode": "InOut",
+        "IsEnabled": True,
+        "Remark": "",
+    }
+
+
+def _make_jump_effect() -> dict:
+    """JumpEffect（跳ねる）エフェクトを生成する"""
+    return {
+        "$type": "YukkuriMovieMaker.Project.Effects.JumpEffect, YukkuriMovieMaker",
+        "Height": _make_anim_param(20.0),
+        "Span": _make_anim_param(1.0),
+        "EasingType": "Sine",
+        "EasingMode": "Out",
+        "IsEnabled": True,
+        "Remark": "",
+    }
+
+
+_IMAGE_EFFECTS = [
+    _make_repeat_zoom_effect,
+    _make_repeat_rotate_effect,
+    _make_repeat_move_effect,
+    _make_jump_effect,
+]
+
+
+def build_image_item(proto_image: dict, file_path: str, frame: int, length: int, image_index: int = 0) -> dict:
     """
     テンプレートのImageItemをプロトタイプとして
     いらすとや画像のImageItemを生成する。
+    image_index: 画像の通し番号（i % 4 でエフェクトをローテーション）
     """
     item = copy.deepcopy(proto_image)
     item["FilePath"] = file_path
@@ -800,7 +929,8 @@ def build_image_item(proto_image: dict, file_path: str, frame: int, length: int)
     item["X"] = _make_anim_param(config["image_x"])
     item["Y"] = _make_anim_param(config["image_y"])
     item["Rotation"] = _make_anim_param(0.0)
-    item["VideoEffects"] = [_make_repeat_zoom_effect()]
+    effect_fn = _IMAGE_EFFECTS[image_index % len(_IMAGE_EFFECTS)]
+    item["VideoEffects"] = [effect_fn()]
     return item
 
 
@@ -809,8 +939,8 @@ def build_image_item(proto_image: dict, file_path: str, frame: int, length: int)
 def read_tsv(tsv_path: str) -> list:
     """
     TSVを読み込んで (speaker, text, se, keyword) のリストを返す
-    se は "" / "SE1" / "SE2"
-    keyword は列5（省略可）: いらすとや検索キーワード
+    列構成（スプシ新仕様）: A=話者, B=セリフ, C=SE挿入箇所
+    keyword は常に空（Gemini APIで自動生成）
     """
     rows = []
     with open(tsv_path, "r", encoding="utf-8-sig") as f:
@@ -821,8 +951,8 @@ def read_tsv(tsv_path: str) -> list:
             parts = line.split("\t")
             speaker = parts[0].strip() if len(parts) > 0 else ""
             text    = parts[1].strip() if len(parts) > 1 else ""
-            se      = parts[3].strip() if len(parts) > 3 else ""
-            keyword = parts[4].strip() if len(parts) > 4 else ""
+            se      = parts[2].strip() if len(parts) > 2 else ""
+            keyword = ""  # Gemini APIで自動生成
             if speaker and text:
                 rows.append((speaker, text, se, keyword))
     return rows
@@ -876,18 +1006,13 @@ def process_tsv(tsv_path: str) -> None:
                 proto_audio = item
                 break
 
-    # プロトタイプImageItemを抽出（Layer=2 のキャラ画像を優先）
-    # ※ image_layer=2 に合わせてLayer=2を優先。なければ任意のImageItemを使用
+    # プロトタイプImageItemを抽出（任意のImageItemを使用）
+    # ※ image_layer=4 なのでLayer縛りなし。最初に見つかったImageItemをプロトとして使う
     proto_image = None
     for item in all_items:
-        if item.get("$type") == image_type and item.get("Layer") == 2:
+        if item.get("$type") == image_type:
             proto_image = item
             break
-    if proto_image is None:
-        for item in all_items:
-            if item.get("$type") == image_type:
-                proto_image = item
-                break
 
     # 全VoiceItemとSE AudioItemを除いたベースアイテム
     # ※テンプレートのVoiceItemはすべてプレースホルダーなので除去し、TSV内容に完全置換する
@@ -934,6 +1059,8 @@ def process_tsv(tsv_path: str) -> None:
         else:
             found_body = True
             body_rows.append(row)
+
+    title_text = next((row[1].strip() for row in rows if row[0].strip() == "タイトル"), "")
 
     print(f"  音声生成中... ({len(rows)}行 = イントロ{len(intro_rows)}行 + 本文{len(body_rows)}行)")
     new_items = []
@@ -994,18 +1121,23 @@ def process_tsv(tsv_path: str) -> None:
     if intro_title_img is not None:
         intro_title_img["Length"] = transition_start
 
-    # 冒頭背景動画（Frame=0のVideoItem）が短ければタイリングで延長
-    if intro_bg_video is not None and transition_start > TMPL_TRANSITION_FRAME:
+    # 冒頭背景動画（Frame=0のVideoItem）をtransition_startに合わせて調整
+    if intro_bg_video is not None:
         orig_len = intro_bg_video.get("Length", TMPL_TRANSITION_FRAME)
-        next_f = orig_len
-        tiles_to_add = []
-        while next_f < transition_start:
-            tile = copy.deepcopy(intro_bg_video)
-            tile["Frame"] = next_f
-            tile["Length"] = min(orig_len, transition_start - next_f)
-            tiles_to_add.append(tile)
-            next_f += orig_len
-        base_items.extend(tiles_to_add)
+        if transition_start <= orig_len:
+            # 元動画が長い場合はtransition_startで切る（本編に被らないよう）
+            intro_bg_video["Length"] = transition_start
+        else:
+            # 元動画が短い場合はタイリングで延長
+            next_f = orig_len
+            tiles_to_add = []
+            while next_f < transition_start:
+                tile = copy.deepcopy(intro_bg_video)
+                tile["Frame"] = next_f
+                tile["Length"] = min(orig_len, transition_start - next_f)
+                tiles_to_add.append(tile)
+                next_f += orig_len
+            base_items.extend(tiles_to_add)
 
     # トランジション（Frame=461のアイテム）をイントロ終端に移動
     for item in transition_items:
@@ -1053,9 +1185,28 @@ def process_tsv(tsv_path: str) -> None:
     os.makedirs(out_folder, exist_ok=True)
     out_path = os.path.join(out_folder, f"{stem}.ymmp")
 
-    # ── 6. 画像挿入（TSVのキーワード列を使用。なければスキップ）
+    # ── 6. 画像挿入（GeminiがあればTSVキーワードを無視して常に再生成）
     image_items = []
-    has_keywords = any(kw for _, _, spk, _, kw in voice_records if kw)
+    has_keywords = any(kw for _, _, _, _, kw in voice_records if kw)
+    gemini_key = config.get("gemini_api_key", "")
+    if gemini_key:
+        # Gemini APIがあれば常に再生成（TSVのキーワードは短すぎていらすとや検索に不向き）
+        print("  Geminiでキーワード再生成中...")
+        body_indices = [
+            i for i, (sf, lf, spk, txt, kw) in enumerate(voice_records)
+            if spk not in {"ナレーション", "タイトル"}
+        ]
+        if body_indices:
+            gem_input = [(voice_records[i][2], voice_records[i][3], "") for i in body_indices]
+            try:
+                gen_kws = gemini_generate_image_keywords(gem_input, gemini_key)
+                for idx, kw in zip(body_indices, gen_kws):
+                    sf, lf, spk, txt, _ = voice_records[idx]
+                    voice_records[idx] = (sf, lf, spk, txt, kw)
+                has_keywords = True
+                print(f"  Geminiキーワード生成完了: {len(gen_kws)}件")
+            except Exception as e:
+                print(f"  [Geminiキーワード生成失敗] {e}")
     if has_keywords and proto_image is not None:
         try:
             images_dir = os.path.join(out_folder, config["image_folder_name"])
@@ -1064,45 +1215,138 @@ def process_tsv(tsv_path: str) -> None:
             # TSVのキーワード列からリスト化（voice_recordsと同順）
             keywords_from_tsv = [kw for _, _, _, _, kw in voice_records]
 
-            # イラストAC リンク集 HTML を生成
-            ac_html_path = os.path.join(out_folder, "イラストACリンク集.html")
-            generate_ac_links_html(voice_records, keywords_from_tsv, ac_html_path)
-            print(f"  リンク集生成: {ac_html_path}")
+            # イラストAC リンク集 HTML を生成（ac_enabled=Trueのときのみ）
+            if config.get("ac_enabled", True):
+                ac_html_path = os.path.join(out_folder, "イラストACリンク集.html")
+                try:
+                    generate_ac_links_html(voice_records, keywords_from_tsv, ac_html_path)
+                    print(f"  リンク集生成: {ac_html_path}")
+                except Exception as e:
+                    print(f"  [リンク集スキップ] {e}")
 
-            img_cache = {}  # key → local path (None = DL失敗 or スキップ)
+            img_cache = {}   # keyword → local path (None = DL失敗)
+            ac_cache = {}    # keyword → AC local path (None = DL失敗)
             max_images = config.get("image_max", 20)
-            dl_count = 0   # いらすとやのダウンロード済み枚数
+            dl_count = 0    # いらすとやDL枚数
+            ac_dl_count = 0 # なのなのなDL枚数
+            image_insert_count = 0  # ymmpに挿入した画像通し番号（エフェクトローテ用）
+
+            # ── 商品リスト読み込み（Google Sheets）
+            products = []
+            try:
+                g_id     = config.get("google_client_id", "")
+                g_secret = config.get("google_client_secret", "")
+                g_token  = config.get("google_refresh_token", "")
+                g_sheet  = config.get("spreadsheet_id", "")
+                if g_id and g_secret and g_token and g_sheet:
+                    at = google_get_access_token(g_id, g_secret, g_token)
+                    # "商品リスト" → fallback "家電リスト" の順で試みる
+                    for sname in (config.get("product_sheet_name", "商品リスト"), "家電リスト", "商品リスト"):
+                        pl = sheets_read_product_list(g_sheet, sname, at)
+                        if pl:
+                            products = pl
+                            print(f"  商品リスト取得: {len(products)}件 (シート: {sname})")
+                            break
+            except Exception as e:
+                print(f"  [商品リストスキップ] {e}")
+
+            product_img_cache = {}  # product_name → local path
 
             for i, (frame, length, speaker, text, kw) in enumerate(voice_records):
                 if not kw:
                     continue  # キーワードなし（ナレーション等）はスキップ
 
-                # ── いらすとや
+                # ── いらすとや（max 20枚）
                 if kw not in img_cache:
                     if dl_count >= max_images:
-                        print(f"  [上限到達] {max_images}枚でいらすとや挿入を終了")
                         img_cache[kw] = None
                     else:
-                        print(f"  [{i+1}/{len(voice_records)}] 画像検索: 「{kw}」({dl_count+1}/{max_images})")
+                        print(f"  [{i+1}/{len(voice_records)}] いらすとや検索: 「{kw}」({dl_count+1}/{max_images})")
                         img_cache[kw] = irasutoya_download(kw, images_dir)
                         if img_cache[kw]:
                             dl_count += 1
                 img_path = img_cache.get(kw)
-
                 if img_path and os.path.exists(img_path):
-                    img_item = build_image_item(proto_image, img_path, frame, length)
+                    img_item = build_image_item(proto_image, img_path, frame, length, image_insert_count)
                     image_items.append(img_item)
+                    image_insert_count += 1
 
-            print(f"  画像挿入: {len(image_items)}件 (いらすとや)")
+                # ── なのなのな (イラストAC)（ac_enabled=Trueのときのみ）
+                if config.get("ac_enabled", True) and kw not in ac_cache:
+                    if ac_dl_count >= max_images:
+                        ac_cache[kw] = None
+                    else:
+                        print(f"  [{i+1}/{len(voice_records)}] AC(なのなのな)検索: 「{kw}」({ac_dl_count+1}/{max_images})")
+                        ac_cache[kw] = ac_illust_nanononona_download(kw, images_dir)
+                        if ac_cache[kw]:
+                            ac_dl_count += 1
+                # ※なのなのな画像はymmpには自動挿入せず使用画像フォルダに保存のみ
+                # （外注版に倣い、差し替えはYMM4で手動）
+
+                # ── 商品画像（セリフに商品名が含まれる場合のみ）
+                if products:
+                    match = find_product_in_text(text, products)
+                    if match:
+                        pname, purl = match
+                        if pname not in product_img_cache:
+                            if purl and ("amazon" in purl.lower() or "amzn" in purl.lower()):
+                                product_img_cache[pname] = amazon_image_download(purl, images_dir, pname)
+                            else:
+                                product_img_cache[pname] = None
+                        pimg = product_img_cache.get(pname)
+                        if pimg and os.path.exists(pimg):
+                            prod_item = build_image_item(proto_image, pimg, frame, length)
+                            prod_item["Layer"] = config.get("image_layer", 2) + 1  # 商品画像は1段上のレイヤー
+                            image_items.append(prod_item)
+
+            print(f"  画像挿入: いらすとや {len([v for v in img_cache.values() if v])}枚 / AC保存 {ac_dl_count}枚 / 商品 {len([v for v in product_img_cache.values() if v])}枚")
         except Exception as e:
             print(f"  [画像スキップ] エラーが発生しました: {e}")
             traceback.print_exc()
     elif proto_image is None:
         print("  [画像スキップ] テンプレートにImageItemが見つかりません")
 
+    # ── 6b. メインキャラ画像挿入（動画内メインキャラ イラストフォルダからランダム選択）
+    main_chara_dir = config.get("main_chara_dir", "")
+    main_chara_interval = config.get("main_chara_interval", 5)
+    if main_chara_dir and os.path.isdir(main_chara_dir) and proto_image is not None:
+        chara_files = [
+            os.path.join(main_chara_dir, fname)
+            for fname in os.listdir(main_chara_dir)
+            if fname.lower().endswith((".png", ".jpg", ".jpeg"))
+        ]
+        if chara_files:
+            body_voice = [
+                (frame, length, spk, txt, kw)
+                for frame, length, spk, txt, kw in voice_records
+                if spk not in {"ナレーション", "タイトル"}
+            ]
+            mc_count = 0
+            for i, (frame, length, spk, txt, kw) in enumerate(body_voice):
+                if i % main_chara_interval == 0:
+                    img_path = random.choice(chara_files)
+                    mc_item = copy.deepcopy(proto_image)
+                    mc_item["FilePath"] = img_path
+                    mc_item["Frame"] = frame
+                    mc_item["Length"] = length
+                    mc_item["Layer"] = 2
+                    mc_item["Zoom"] = _make_anim_param(63.84)
+                    mc_item["X"] = _make_anim_param(-30.0)
+                    mc_item["Y"] = _make_anim_param(-216.5)
+                    mc_item["Rotation"] = _make_anim_param(0.0)
+                    mc_item["VideoEffects"] = []
+                    image_items.append(mc_item)
+                    mc_count += 1
+            print(f"  メインキャラ画像挿入: {mc_count}枚")
+        else:
+            print(f"  [メインキャラスキップ] フォルダに画像なし: {main_chara_dir}")
+    elif main_chara_dir and not os.path.isdir(main_chara_dir):
+        print(f"  [メインキャラスキップ] フォルダが見つかりません: {main_chara_dir}")
+
     # ── 7. 背景ビデオ延長・エンディング移動
-    # コンテンツ終端フレーム（VoiceItem配置後）
-    content_end = current_frame
+    # コンテンツ終端フレーム（VoiceItem配置後 + 0.5秒のマージン）
+    ENDING_MARGIN = 30  # 0.5秒（60fps基準）：最後のセリフとエンディングの被りを防ぐ
+    content_end = current_frame + ENDING_MARGIN
     video_type = "YukkuriMovieMaker.Project.Items.VideoItem, YukkuriMovieMaker"
 
     image_type = "YukkuriMovieMaker.Project.Items.ImageItem, YukkuriMovieMaker"
@@ -1121,7 +1365,7 @@ def process_tsv(tsv_path: str) -> None:
             fp = item.get("FilePath", "")
             if bg_bubble is None and ("バブル" in fp):
                 bg_bubble = item
-            elif fr >= TMPL_ENDING_FRAME:
+            elif fr >= TMPL_ENDING_FRAME and "バブル" not in fp:
                 if ending_video is None:
                     ending_video = item
         elif item_type == image_type and fr >= TMPL_ENDING_FRAME:
@@ -1150,6 +1394,16 @@ def process_tsv(tsv_path: str) -> None:
         offset = img.get("Frame", TMPL_ENDING_FRAME) - TMPL_ENDING_FRAME
         img["Frame"] = content_end + offset
 
+    # TextItem（ピンクタイトル吹き出し）を本編期間に更新
+    text_item_type = "YukkuriMovieMaker.Project.Items.TextItem, YukkuriMovieMaker"
+    for item in base_items:
+        if item.get("$type") == text_item_type:
+            if title_text:
+                item["Text"] = _wrap_serif(title_text, max_chars=18)
+            item["Frame"] = body_start_frame
+            item["Length"] = content_end - body_start_frame
+            break
+
     # ── 8. タイムライン更新・保存
     timeline["Items"] = base_items + new_items + image_items
     timeline["Length"] = content_end + ending_length
@@ -1169,12 +1423,13 @@ def process_tsv(tsv_path: str) -> None:
         ac_html = os.path.join(out_folder, "イラストACリンク集.html")
         if os.path.exists(ac_html):
             print(f"         イラストACリンク集: {ac_html}")
-            # ブラウザで自動オープン（Windowsのみ）
-            try:
-                os.startfile(ac_html)
-                print(f"  [ブラウザ起動] イラストACリンク集を開きました")
-            except Exception:
-                pass
+            # ブラウザ自動オープン: ac_enabled=Trueのときのみ
+            if config.get("ac_enabled", True):
+                try:
+                    os.startfile(ac_html)
+                    print(f"  [ブラウザ起動] イラストACリンク集を開きました")
+                except Exception:
+                    pass
 
 
 # ── ウォッチモード ─────────────────────────────────────────────────────────────

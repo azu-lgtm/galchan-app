@@ -56,7 +56,8 @@ export async function copyScriptTemplate(
 // ── 台本シートにスクリプトデータを書き込む ────────────────────────────────────
 /**
  * コピーしたスプレッドシートの「台本」シートにデータを書き込む
- * 列構成: A=文字数, B=話者, C=本文, D=SE挿入箇所
+ * 列構成: A=話者 / B=本文 / C=SE挿入箇所
+ * Gemini出力形式（タブ区切り3列）をそのまま解析して書き込む
  * SEルール: ナレーション・タイトル以外の発言を10件ごとにSE1→SE2交互で挿入
  */
 export async function fillScriptSheet(spreadsheetId: string, script: string): Promise<void> {
@@ -69,13 +70,14 @@ export async function fillScriptSheet(spreadsheetId: string, script: string): Pr
   let seIndex = 0
 
   const lines = script.split('\n').filter(l => l.trim())
-  const rows: (string | number)[][] = []
+  const rows: string[][] = []
 
   for (const line of lines) {
-    const m = line.match(/^【(.+?)】(.*)$/)
-    if (!m) continue
-    const speaker = m[1].trim() || 'ナレーション'
-    const text = m[2].trim()
+    const parts = line.split('\t')
+    if (parts.length < 2) continue
+    const speaker = parts[0].trim()
+    const text = parts[1].trim()
+    if (!speaker || !text) continue
 
     let se = ''
     if (!NO_SE_SPEAKERS.has(speaker)) {
@@ -87,13 +89,13 @@ export async function fillScriptSheet(spreadsheetId: string, script: string): Pr
       }
     }
 
-    rows.push([text.length, speaker, text, se])
+    rows.push([speaker, text, se])
   }
 
-  // row4以降のテンプレートデータをクリア
+  // row4以降のテンプレートデータをクリア（A=話者, B=本文, C=SE の3列）
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: '台本!A4:D1000',
+    range: '台本!A4:C1000',
   })
 
   if (rows.length > 0) {
