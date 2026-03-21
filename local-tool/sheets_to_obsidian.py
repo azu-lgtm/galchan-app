@@ -12,9 +12,11 @@ sheets_to_obsidian.py
   - テンプレート説明行
 """
 
+import os
+import json
 import requests
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def _load_env():
     """プロジェクトルートの .env.local から環境変数を読み込む"""
@@ -34,8 +36,9 @@ REFRESH_TOKEN  = os.environ["GOOGLE_REFRESH_TOKEN"]
 SPREADSHEET_ID = os.environ["SPREADSHEET_ID_GALCHAN"]
 OBSIDIAN_PATH  = Path(os.environ.get(
     "OBSIDIAN_VAULT_PATH",
-    r"C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian"
-)) / "02_youtube" / "ガルちゃんねる"
+    r"C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる"
+))
+CHANNEL_ID     = os.environ.get("YOUTUBE_CHANNEL_ID_GALCHAN", "")
 
 def p(msg):
     print(msg, flush=True)
@@ -186,6 +189,122 @@ def build_rival_md(rows):
 
     return "\n".join(lines) + "\n"
 
+# -- YouTube Analytics ----------------------------------------------------
+def get_channel_analytics(token):
+    """
+    YouTube Analytics API で過去90日のチャンネル全体データを取得。
+    戻り値: dict (views, watchTimeMinutes, subscribers, estimatedRevenue など)
+    スコープ不足時は None を返す（スキップ）
+    """
+    end = datetime.now().date()
+    start = end - timedelta(days=90)
+    resp = requests.get(
+        "https://youtubeanalytics.googleapis.com/v2/reports",
+        params={
+            "ids": f"channel=={CHANNEL_ID}",
+            "startDate": start.isoformat(),
+            "endDate": end.isoformat(),
+            "metrics": "views,estimatedMinutesWatched,subscribersGained,subscribersLost",
+            "dimensions": "day",
+            "sort": "day",
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    if resp.status_code == 403:
+        return None  # スコープ未付与
+    resp.raise_for_status()
+    return resp.json()
+
+def get_video_analytics(token, video_ids):
+    """動画別の直近30日アナリティクス。戻り値: {videoId: {views, watchTime, ...}}"""
+    if not video_ids or not CHANNEL_ID:
+        return {}
+    ids_str = ",".join(video_ids[:50])
+    end = datetime.now().date()
+    start = end - timedelta(days=30)
+    resp = requests.get(
+        "https://youtubeanalytics.googleapis.com/v2/reports",
+        params={
+            "ids": f"channel=={CHANNEL_ID}",
+            "startDate": start.isoformat(),
+            "endDate": end.isoformat(),
+            "metrics": "views,estimatedMinutesWatched,averageViewDuration,subscribersGained",
+            "dimensions": "video",
+            "filters": f"video=={ids_str}",
+            "sort": "-views",
+            "maxResults": 50,
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    if resp.status_code == 403:
+        return {}
+    resp.raise_for_status()
+    data = resp.json()
+    result = {}
+    headers = [h["name"] for h in data.get("columnHeaders", [])]
+    for row in data.get("rows", []):
+        row_dict = dict(zip(headers, row))
+        vid_id = row_dict.get("video", "")
+        if vid_id:
+            result[vid_id] = row_dict
+    return result
+
+def build_analytics_md(channel_data, video_data):
+    """アナリティクスデータをMarkdownに変換"""
+    lines = [
+        "---",
+        f"updated: {today()}",
+        "tags: [galchan, analytics]",
+        "---",
+        "",
+        "# YouTubeアナリティクス",
+        f"> 最終更新: {today()} / 過去90日データ",
+        "",
+    ]
+    if channel_data:
+        rows = channel_data.get("rows", [])
+        if rows:
+            total_views = sum(r[1] for r in rows)
+            total_watch = sum(r[2] for r in rows)
+            total_gained = sum(r[3] for r in rows)
+            total_lost = sum(r[4] for r in rows) if len(rows[0]) > 4 else 0
+            lines += [
+                "## チャンネル全体（過去90日）",
+                f"- 総再生回数: {int(total_views):,}",
+                f"- 総視聴時間: {int(total_watch):,} 分",
+                f"- 登録者増加: +{int(total_gained)} / -{int(total_lost)}",
+                "",
+                "## 日別推移",
+                "",
+                "| 日付 | 再生数 | 視聴時間(分) | 登録者増 |",
+                "|---|---|---|---|",
+            ]
+            for r in rows[-30:]:  # 直近30日
+                lines.append(f"| {r[0]} | {int(r[1]):,} | {int(r[2]):,} | +{int(r[3])} |")
+            lines.append("")
+    else:
+        lines += [
+            "## チャンネル全体",
+            "> ⚠️ YouTube Analytics スコープ未付与のため取得不可。get_token.py を再実行してください。",
+            "",
+        ]
+    if video_data:
+        lines += [
+            "## 動画別（過去30日）",
+            "",
+            "| 動画ID | 再生数 | 視聴時間(分) | 平均視聴時間(秒) | 登録者増 |",
+            "|---|---|---|---|---|",
+        ]
+        for vid_id, d in video_data.items():
+            lines.append(
+                f"| {vid_id} | {int(d.get('views',0)):,} | "
+                f"{int(d.get('estimatedMinutesWatched',0)):,} | "
+                f"{int(d.get('averageViewDuration',0))} | "
+                f"+{int(d.get('subscribersGained',0))} |"
+            )
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
 # -- メイン ---------------------------------------------------------------
 def main():
     p("=== sheets_to_obsidian.py start ===")
@@ -211,6 +330,16 @@ def main():
     p("5. Writing rival channel list...")
     out = OBSIDIAN_PATH / "競合分析" / "競合チャンネルリスト.md"
     out.write_text(build_rival_md(rival_rows), encoding="utf-8")
+    p(f"   OK: {out.name}")
+
+    p("6. Getting YouTube Analytics...")
+    channel_analytics = get_channel_analytics(token)
+    if channel_analytics is None:
+        p("   SKIP: YouTube Analytics scope not granted yet")
+    else:
+        p(f"   OK: {len(channel_analytics.get('rows', []))} days")
+    out = OBSIDIAN_PATH / "自分動画" / "アナリティクス.md"
+    out.write_text(build_analytics_md(channel_analytics, {}), encoding="utf-8")
     p(f"   OK: {out.name}")
 
     # スタブファイル作成

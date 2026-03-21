@@ -25,13 +25,18 @@ _load_env()
 CLIENT_ID     = os.environ["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
 REDIRECT_URI  = "http://localhost:8080/callback"
-SCOPE         = "https://www.googleapis.com/auth/spreadsheets.readonly"
+SCOPE         = " ".join([
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+    "https://www.googleapis.com/auth/youtube.readonly",
+])
 
 code_received = None
+server_instance = None
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        global code_received
+        global code_received, server_instance
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         if "code" in params:
@@ -39,18 +44,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write("<h1>OK! このタブを閉じてください。</h1>".encode("utf-8"))
+            threading.Thread(target=server_instance.shutdown).start()
         else:
-            self.send_response(400)
+            self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"code not found")
+            self.wfile.write(b"waiting...")
     def log_message(self, *args):
         pass  # ログを抑制
 
 def main():
+    global server_instance
     # ローカルサーバー起動
-    server = http.server.HTTPServer(("localhost", 8080), Handler)
-    t = threading.Thread(target=server.handle_request)
-    t.start()
+    server_instance = http.server.HTTPServer(("localhost", 8080), Handler)
 
     # ブラウザでOAuth認証ページを開く
     auth_url = (
@@ -65,8 +70,10 @@ def main():
     print("ブラウザが開きます。ガルちゃんアカウント（garuchanneru226@gmail.com）で認証してください...")
     webbrowser.open(auth_url)
 
+    t = threading.Thread(target=server_instance.serve_forever)
+    t.start()
     t.join(timeout=120)
-    server.server_close()
+    server_instance.server_close()
 
     if not code_received:
         print("タイムアウト（120秒）。再実行してください。")
