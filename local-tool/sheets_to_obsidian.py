@@ -144,6 +144,15 @@ def build_own_md(rows):
     return "\n".join(lines) + "\n"
 
 # -- 競合チャンネルリスト -> MD --------------------------------------------
+# 列定義（Row7のヘッダー順）
+# 0:ベンチマーク 1:チャンネルURL 2:チャンネル名 3:登録者数 4:概要欄
+# 5:使用音声 6:使用素材 7:登録日 8:動画本数
+# 9:動画リンク 10:サムネ 11:タイトル 12:再生数 13:動画の尺
+# 14:白い帯ピーク 15:視聴者層 16:情報入力日 17:コメント 18:文字起こし
+
+def _is_channel_url(s):
+    return s.startswith("http") and ("youtube.com/@" in s or "youtube.com/channel/" in s or "youtu.be" not in s)
+
 def build_rival_md(rows):
     lines = [
         "---",
@@ -156,36 +165,100 @@ def build_rival_md(rows):
         "",
     ]
 
-    # ヘッダー行を探す（テンプレート説明行をスキップ）
+    # ヘッダー行を探す
     header_idx = -1
     for i, row in enumerate(rows):
-        row_str = " ".join(str(c) for c in row[:8])
-        if ("チャンネル名" in row_str or "URL" in row_str) and "ベンチマーク" in row_str:
+        row_str = " ".join(str(c) for c in row[:10])
+        if "ベンチマーク" in row_str and "チャンネル名" in row_str:
             header_idx = i
-            break
-        # フォールバック: 「※」がない行でURLらしきものがある
-        if i > 5 and "http" in row_str and "※" not in row_str:
-            header_idx = i - 1 if i > 0 else i
             break
 
     if header_idx < 0:
-        # データが見つからない場合はそのまま出力
-        for row in rows[5:]:
-            if any(row):
-                lines.append("| " + " | ".join(str(c)[:60] for c in row[:8]) + " |")
+        lines.append("> データが見つかりませんでした。")
         return "\n".join(lines) + "\n"
 
-    headers = rows[header_idx][:8]
-    lines.append("| " + " | ".join(str(h) for h in headers) + " |")
-    lines.append("|" + "---|" * len(headers))
+    # チャンネルごとにグループ化
+    channels = []
+    current_ch = None
 
     for row in rows[header_idx + 1:]:
         if not any(row):
             continue
-        cells = [safe(row, j)[:60].replace("|", "｜").replace("\n", " ") for j in range(len(headers))]
-        while len(cells) < len(headers):
-            cells.append("")
-        lines.append("| " + " | ".join(cells) + " |")
+        ch_url  = safe(row, 1)
+        vid_url = safe(row, 9)
+
+        if ch_url and _is_channel_url(ch_url):
+            current_ch = {
+                "benchmark":   safe(row, 0),
+                "url":         ch_url,
+                "name":        safe(row, 2),
+                "subscribers": safe(row, 3),
+                "summary":     safe(row, 4)[:150].replace("\n", " "),
+                "voice":       safe(row, 5),
+                "material":    safe(row, 6),
+                "registered":  safe(row, 7),
+                "vid_count":   safe(row, 8),
+                "videos":      [],
+            }
+            channels.append(current_ch)
+
+        # 同行 or 後続行に動画データがある場合
+        if vid_url and "youtu" in vid_url:
+            vid = {
+                "url":        vid_url,
+                "thumbnail":  safe(row, 10),
+                "title":      safe(row, 11),
+                "views":      safe(row, 12),
+                "duration":   safe(row, 13),
+                "peak":       safe(row, 14),
+                "audience":   safe(row, 15),
+                "input_date": safe(row, 16),
+                "comment":    safe(row, 17),
+                "transcript": safe(row, 18),
+            }
+            if current_ch is not None:
+                current_ch["videos"].append(vid)
+
+    # Markdown出力
+    for ch in channels:
+        bm = f" `{ch['benchmark']}`" if ch['benchmark'] else ""
+        lines.append(f"## {ch['name']}{bm}")
+        lines.append("")
+        lines.append(f"- **URL**: {ch['url']}")
+        lines.append(f"- **登録者数**: {ch['subscribers']} / 動画本数: {ch['vid_count']}")
+        if ch['voice'] or ch['material']:
+            lines.append(f"- **素材**: 音声={ch['voice']} / 映像={ch['material']}")
+        if ch['summary']:
+            lines.append(f"- **概要**: {ch['summary']}")
+        lines.append("")
+
+        if ch["videos"]:
+            lines.append("### 動画")
+            lines.append("")
+            lines.append("| タイトル | 再生数 | 尺 | 視聴者層 | リンク |")
+            lines.append("|---|---|---|---|---|")
+            for v in ch["videos"]:
+                title = v["title"][:40].replace("|", "｜").replace("\n", " ")
+                link  = f"[link]({v['url']})" if v["url"] else ""
+                lines.append(
+                    f"| {title} | {v['views']} | {v['duration']} "
+                    f"| {v['audience'][:20]} | {link} |"
+                )
+            lines.append("")
+
+            # 白い帯ピーク・コメント・文字起こし（内容がある動画のみ）
+            for v in ch["videos"]:
+                if not (v["peak"] or v["comment"] or v["transcript"]):
+                    continue
+                t = v["title"][:30].replace("\n", " ") or v["url"]
+                lines.append(f"#### 📹 {t}")
+                if v["peak"]:
+                    lines.append(f"**白い帯ピーク**: {v['peak'][:200]}")
+                if v["comment"]:
+                    lines.append(f"**コメント**:\n{v['comment'][:500]}")
+                if v["transcript"]:
+                    lines.append(f"**文字起こし**:\n{v['transcript'][:1000]}")
+                lines.append("")
 
     return "\n".join(lines) + "\n"
 
