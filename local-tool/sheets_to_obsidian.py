@@ -7,9 +7,8 @@ sheets_to_obsidian.py
   1. 自分チャンネル・動画管理表 -> 自分動画/動画管理リスト.md
   2. 競合チャンネル・動画管理表 -> 競合分析/競合チャンネルリスト.md
 
-除外:
-  - 各台本スプシの内容（台本はスプシのまま管理）
-  - テンプレート説明行
+取得対象:
+  3. 各台本スプシ -> 台本/【外ガルN台本】タイトル.md（読み取り専用コピー）
 """
 
 import os
@@ -262,6 +261,85 @@ def build_rival_md(rows):
 
     return "\n".join(lines) + "\n"
 
+# -- 台本スプシ -> MD -----------------------------------------------------
+def extract_script_id(url):
+    """スプシURLからIDを抽出"""
+    if "/spreadsheets/d/" in url:
+        return url.split("/spreadsheets/d/")[1].split("/")[0]
+    return None
+
+def get_script_rows(token, sid):
+    """台本スプシの全行を取得"""
+    resp = requests.get(
+        f"https://sheets.googleapis.com/v4/spreadsheets/{sid}/values/A1:C500",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    if resp.status_code != 200:
+        return None
+    return resp.json().get("values", [])
+
+def build_script_md(name, url, rows):
+    """台本スプシの内容をMDに変換"""
+    lines = [
+        "---",
+        f"updated: {today()}",
+        "tags: [galchan, script]",
+        f"source: {url}",
+        "---",
+        "",
+        f"# {name}",
+        f"> スプシ（読み取り専用コピー）: {url}",
+        f"> 最終取得: {today()}",
+        "",
+        "---",
+        "",
+    ]
+    in_script = False
+    for row in rows:
+        if not any(row):
+            continue
+        col0 = str(row[0]).strip() if row else ""
+        col1 = str(row[1]).strip() if len(row) > 1 else ""
+        # 【台本】マーカーを検出
+        if "【台本】" in col0 or "【台本】" in col1:
+            in_script = True
+            continue
+        if not in_script:
+            continue
+        if col0 and col1:
+            lines.append(f"**{col0}**　{col1}")
+        elif col1:
+            lines.append(col1)
+    return "\n".join(lines) + "\n"
+
+def sync_scripts(token, own_rows):
+    """自分チャンネル管理表から台本スプシ一覧を取得してObsidianにコピー"""
+    synced = []
+    (OBSIDIAN_PATH / "台本").mkdir(parents=True, exist_ok=True)
+
+    for row in own_rows:
+        name = safe(row, 5)   # 台本名
+        url  = safe(row, 6)   # スプシURL
+        if not (name and url and url.startswith("http")):
+            continue
+        sid = extract_script_id(url)
+        if not sid:
+            continue
+
+        rows = get_script_rows(token, sid)
+        if rows is None:
+            p(f"   SKIP (アクセス不可): {name}")
+            continue
+
+        md = build_script_md(name, url, rows)
+        # ファイル名: 台本名をそのまま使用（無効文字除去）
+        safe_name = name.replace("/", "／").replace("\\", "＼").replace(":", "：")
+        out = OBSIDIAN_PATH / "台本" / f"{safe_name}.md"
+        out.write_text(md, encoding="utf-8")
+        synced.append(name)
+
+    return synced
+
 # -- YouTube Analytics ----------------------------------------------------
 def get_channel_analytics(token):
     """
@@ -405,7 +483,11 @@ def main():
     out.write_text(build_rival_md(rival_rows), encoding="utf-8")
     p(f"   OK: {out.name}")
 
-    p("6. Getting YouTube Analytics...")
+    p("6. Syncing scripts from spreadsheets...")
+    synced = sync_scripts(token, own_rows)
+    p(f"   OK: {len(synced)}本 → {synced}")
+
+    p("8. Getting YouTube Analytics...")
     channel_analytics = get_channel_analytics(token)
     if channel_analytics is None:
         p("   SKIP: YouTube Analytics scope not granted yet")
