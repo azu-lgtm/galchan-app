@@ -29,15 +29,16 @@ def _load_env():
 
 _load_env()
 
-CLIENT_ID      = os.environ["GOOGLE_CLIENT_ID"]
-CLIENT_SECRET  = os.environ["GOOGLE_CLIENT_SECRET"]
-REFRESH_TOKEN  = os.environ["GOOGLE_REFRESH_TOKEN"]
-SPREADSHEET_ID = os.environ["SPREADSHEET_ID_GALCHAN"]
-OBSIDIAN_PATH  = Path(os.environ.get(
+CLIENT_ID       = os.environ["GOOGLE_CLIENT_ID"]
+CLIENT_SECRET   = os.environ["GOOGLE_CLIENT_SECRET"]
+REFRESH_TOKEN   = os.environ["GOOGLE_REFRESH_TOKEN"]
+SPREADSHEET_ID  = os.environ["SPREADSHEET_ID_GALCHAN"]
+OBSIDIAN_PATH   = Path(os.environ.get(
     "OBSIDIAN_VAULT_PATH",
     r"C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる"
 ))
-CHANNEL_ID     = os.environ.get("YOUTUBE_CHANNEL_ID_GALCHAN", "")
+CHANNEL_ID      = os.environ.get("YOUTUBE_CHANNEL_ID_GALCHAN", "")
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
 def p(msg):
     print(msg, flush=True)
@@ -340,6 +341,70 @@ def sync_scripts(token, own_rows):
 
     return synced
 
+# -- YouTube Data API（リアルタイム統計）----------------------------------
+def get_channel_video_ids(token):
+    """
+    YouTube Data API でチャンネルのuploadsプレイリストから動画ID一覧を取得。
+    youtube.readonly スコープ必要。失敗時は空リストを返す。
+    """
+    if not CHANNEL_ID:
+        return []
+    # uploadsプレイリストIDを取得
+    resp = requests.get(
+        "https://www.googleapis.com/youtube/v3/channels",
+        params={"part": "contentDetails", "id": CHANNEL_ID},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    if resp.status_code != 200:
+        return []
+    items = resp.json().get("items", [])
+    if not items:
+        return []
+    uploads_id = items[0]["contentDetails"]["relatedPlaylists"].get("uploads", "")
+    if not uploads_id:
+        return []
+    # プレイリストから動画IDを取得
+    resp2 = requests.get(
+        "https://www.googleapis.com/youtube/v3/playlistItems",
+        params={"part": "contentDetails", "playlistId": uploads_id, "maxResults": 50},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    if resp2.status_code != 200:
+        return []
+    return [item["contentDetails"]["videoId"] for item in resp2.json().get("items", []) if item.get("contentDetails", {}).get("videoId")]
+
+def get_video_realtime_stats(video_ids):
+    """
+    YouTube Data API v3 videos.list でリアルタイム統計を取得（APIキー使用）。
+    公開動画のviewCount・likeCount・commentCount をほぼリアルタイムで取得可能。
+    """
+    if not video_ids or not YOUTUBE_API_KEY:
+        return {}
+    ids_str = ",".join(video_ids[:50])
+    resp = requests.get(
+        "https://www.googleapis.com/youtube/v3/videos",
+        params={
+            "part": "statistics,snippet",
+            "id": ids_str,
+            "key": YOUTUBE_API_KEY,
+        }
+    )
+    if resp.status_code != 200:
+        return {}
+    result = {}
+    for item in resp.json().get("items", []):
+        vid_id = item["id"]
+        stats   = item.get("statistics", {})
+        snippet = item.get("snippet", {})
+        result[vid_id] = {
+            "title":        snippet.get("title", ""),
+            "publishedAt":  snippet.get("publishedAt", "")[:10],
+            "viewCount":    int(stats.get("viewCount", 0)),
+            "likeCount":    int(stats.get("likeCount", 0)),
+            "commentCount": int(stats.get("commentCount", 0)),
+        }
+    return result
+
 # -- YouTube Analytics ----------------------------------------------------
 def get_channel_analytics(token):
     """
@@ -400,7 +465,7 @@ def get_video_analytics(token, video_ids):
             result[vid_id] = row_dict
     return result
 
-def build_analytics_md(channel_data, video_data):
+def build_analytics_md(channel_data, video_data, realtime_data=None):
     """アナリティクスデータをMarkdownに変換"""
     lines = [
         "---",
@@ -439,20 +504,31 @@ def build_analytics_md(channel_data, video_data):
             "> ⚠️ YouTube Analytics スコープ未付与のため取得不可。get_token.py を再実行してください。",
             "",
         ]
-    if video_data:
+    if realtime_data is None:
+        realtime_data = {}
+    if video_data or realtime_data:
         lines += [
-            "## 動画別（過去30日）",
+            "## 動画別データ",
             "",
-            "| 動画ID | 再生数 | 視聴時間(分) | 平均視聴時間(秒) | 登録者増 |",
-            "|---|---|---|---|---|",
+            f"> Analytics: 過去30日（昨日まで） / リアルタイム統計: {today()} 時点",
+            "",
+            "| タイトル | 投稿日 | 総再生数(RT) | 高評価 | コメント | 30日再生(Analytics) | 平均視聴(秒) | 登録者増 |",
+            "|---|---|---|---|---|---|---|---|",
         ]
-        for vid_id, d in video_data.items():
-            lines.append(
-                f"| {vid_id} | {int(d.get('views',0)):,} | "
-                f"{int(d.get('estimatedMinutesWatched',0)):,} | "
-                f"{int(d.get('averageViewDuration',0))} | "
-                f"+{int(d.get('subscribersGained',0))} |"
-            )
+        # リアルタイムデータを基準に全動画をリスト
+        all_ids = list(realtime_data.keys()) if realtime_data else list(video_data.keys())
+        for vid_id in all_ids:
+            rt = realtime_data.get(vid_id, {})
+            an = video_data.get(vid_id, {})
+            title    = rt.get("title", vid_id)[:35].replace("|", "｜")
+            pub_date = rt.get("publishedAt", "")
+            view_rt  = f"{rt.get('viewCount', '-'):,}" if rt.get("viewCount") is not None else "-"
+            like     = f"{rt.get('likeCount', '-'):,}" if rt.get("likeCount") is not None else "-"
+            comment  = f"{rt.get('commentCount', '-'):,}" if rt.get("commentCount") is not None else "-"
+            view_an  = f"{int(an.get('views', 0)):,}" if an.get("views") else "-"
+            avg_dur  = f"{int(an.get('averageViewDuration', 0))}" if an.get("averageViewDuration") else "-"
+            sub_gain = f"+{int(an.get('subscribersGained', 0))}" if an.get("subscribersGained") else "-"
+            lines.append(f"| {title} | {pub_date} | {view_rt} | {like} | {comment} | {view_an} | {avg_dur} | {sub_gain} |")
         lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -487,14 +563,32 @@ def main():
     synced = sync_scripts(token, own_rows)
     p(f"   OK: {len(synced)}本 → {synced}")
 
-    p("8. Getting YouTube Analytics...")
+    p("7. Getting video IDs from channel...")
+    video_ids = get_channel_video_ids(token)
+    p(f"   Found: {len(video_ids)} videos")
+
+    p("8. Getting YouTube Analytics (channel + per-video)...")
     channel_analytics = get_channel_analytics(token)
     if channel_analytics is None:
-        p("   SKIP: YouTube Analytics scope not granted yet")
+        p("   SKIP: YouTube Analytics scope not granted yet (run get_token.py)")
     else:
         p(f"   OK: {len(channel_analytics.get('rows', []))} days")
+
+    video_analytics = {}
+    if video_ids and channel_analytics is not None:
+        video_analytics = get_video_analytics(token, video_ids)
+        p(f"   Video analytics: {len(video_analytics)} videos")
+
+    p("8b. Getting realtime stats (YouTube Data API)...")
+    realtime_stats = {}
+    if video_ids:
+        realtime_stats = get_video_realtime_stats(video_ids)
+        p(f"   Realtime stats: {len(realtime_stats)} videos")
+    else:
+        p("   SKIP: no video IDs (check YOUTUBE_CHANNEL_ID_GALCHAN or youtube.readonly scope)")
+
     out = OBSIDIAN_PATH / "自分動画" / "アナリティクス.md"
-    out.write_text(build_analytics_md(channel_analytics, {}), encoding="utf-8")
+    out.write_text(build_analytics_md(channel_analytics, video_analytics, realtime_stats), encoding="utf-8")
     p(f"   OK: {out.name}")
 
     # スタブファイル作成

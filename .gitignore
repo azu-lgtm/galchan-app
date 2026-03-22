@@ -38,3 +38,20 @@ next-env.d.ts
 .env.vercel
 
 .vercel
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# local-tool 一時ファイル
+local-tool/channel_info.json
+local-tool/hdr.json
+local-tool/hdr2.json
+local-tool/headers.txt
+local-tool/preview.json
+local-tool/run_out*.txt
+local-tool/run_result.txt
+local-tool/sheets_list.json
+local-tool/tsv_input/*_done.tsv
+local-tool/*_done.tsv
