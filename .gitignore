@@ -55,3 +55,6 @@ local-tool/run_result.txt
 local-tool/sheets_list.json
 local-tool/tsv_input/*_done.tsv
 local-tool/*_done.tsv
+local-tool/tsv_input/*.tsv
+local-tool/add_lines*.py
+local-tool/write_tsv*.py
