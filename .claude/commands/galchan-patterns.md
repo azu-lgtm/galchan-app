@@ -1,6 +1,6 @@
 # /galchan-patterns — 勝ちパターン更新
 
-競合分析・自分動画データから勝ちパターンを抽出し、Obsidianの勝ちパターンファイルを更新します。
+競合分析・自分動画データから勝ちパターンを抽出し、Obsidianの勝ちパターンファイルを更新。
 
 ## 手順
 
@@ -9,6 +9,7 @@
 - `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\ガル分析\` フォルダ内の全MDファイル（Glob使用）
 - `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\競合分析\競合チャンネルリスト.md`
 - `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\動画管理リスト.md`
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\アナリティクス.md`
 - `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\分析結果\勝ちパターン.md`（既存）
 
 ### 2. 勝ちパターン抽出
@@ -38,20 +39,24 @@
 
 ## タイトルパターン
 - ✅ （パターン）→ 理由
-- ✅ ...
 
 ## サムネ・白い帯パターン
 - ✅ ...
 
 ## バズりやすいテーマ
 1. （テーマ）— 根拠となる動画
-2. ...
 
 ## 避けるべきパターン
 - ❌ ...
+
+## 動画別アナリティクス実績
+（最新データで更新）
+
+## チャンネルの差別化ポジション
+（最新分析で更新）
 
 ## 次に試すべき仮説
 - ...
 ```
 
-更新完了後に変更点のサマリーを報告してください。
+更新完了後に変更点のサマリーを報告。

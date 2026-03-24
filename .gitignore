@@ -58,3 +58,5 @@ local-tool/*_done.tsv
 local-tool/tsv_input/*.tsv
 local-tool/add_lines*.py
 local-tool/write_tsv*.py
+local-tool/run_log.txt
+local-tool/tsv_input/save_payload.json
