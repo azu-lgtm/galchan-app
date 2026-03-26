@@ -50,6 +50,13 @@ export async function copyScriptTemplate(
 
   const id = res.data.id!
   const url = `https://docs.google.com/spreadsheets/d/${id}/edit`
+
+  // リンクを知っている全員が閲覧可能に設定（外注さんへの共有用）
+  await drive.permissions.create({
+    fileId: id,
+    requestBody: { role: 'reader', type: 'anyone' },
+  })
+
   return { id, url }
 }
 
@@ -163,6 +170,7 @@ export async function fillProductSheet(
  *   N: 視聴維持率ピークの内容 ← 空（手動入力）
  *   O: 切り口    ← topic.angle
  *   P: 動画企画の型 ← style label
+ *   Q: ワーカーメッセージ ← materials.workerMessage（任意）
  */
 export async function appendToManagementSheet(row: (string | null)[]): Promise<void> {
   const auth = getAuth()
@@ -239,5 +247,6 @@ export function buildManagementRow(
     null,                           // N: 視聴維持率ピーク（手動）
     topic.angle,                    // O: 切り口
     styleLabel,                     // P: 動画企画の型
+    materials.workerMessage ?? '',  // Q: ワーカーメッセージ
   ]
 }

@@ -49,7 +49,7 @@ def validate(tsv_path: str) -> dict:
         issues.append({"rule": "行数やや少ない", "line": 0, "detail": f"総行数{total}行。285行以上を推奨"})
 
     # --- 1b. 本文文字数チェック ---
-    total_chars = sum(len(cols[1].strip()) if len(line.split("\t")) > 1 else 0 for line in lines)
+    total_chars = sum(len(line.split("\t")[1].strip()) if len(line.split("\t")) > 1 else 0 for line in lines)
     stats["total_chars"] = total_chars
     if total_chars < 7500:
         issues.append({"rule": "文字数不足（重大）", "line": 0, "detail": f"本文{total_chars}字。8,600〜9,000字を目標"})

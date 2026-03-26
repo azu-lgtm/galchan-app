@@ -26,7 +26,9 @@ CLIENT_ID     = os.environ["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
 REDIRECT_URI  = "http://localhost:8080/callback"
 SCOPE         = " ".join([
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
     "https://www.googleapis.com/auth/youtube.readonly",
 ])
@@ -92,11 +94,25 @@ def main():
     data = resp.json()
 
     if "refresh_token" in data:
-        print("\n✅ REFRESH_TOKEN 取得成功！")
-        print(f"\nGOOGLE_REFRESH_TOKEN={data['refresh_token']}")
-        print("\n↑ この値を .env.local と sheets_to_obsidian.py の REFRESH_TOKEN に貼り替えてください。")
+        new_token = data['refresh_token']
+        print(f"\n[OK] REFRESH_TOKEN 取得成功！")
+        print(f"\nGOOGLE_REFRESH_TOKEN={new_token}")
+
+        # .env.local に自動書き込み
+        env_path = Path(__file__).parent.parent / ".env.local"
+        if env_path.exists():
+            content = env_path.read_text(encoding="utf-8")
+            import re
+            if "GOOGLE_REFRESH_TOKEN=" in content:
+                content = re.sub(r'GOOGLE_REFRESH_TOKEN=.*', f'GOOGLE_REFRESH_TOKEN={new_token}', content)
+            else:
+                content += f'\nGOOGLE_REFRESH_TOKEN={new_token}\n'
+            env_path.write_text(content, encoding="utf-8")
+            print(f"\n[OK] .env.local を自動更新しました")
+        else:
+            print(f"\n.env.local が見つかりません。手動で貼り付けてください。")
     else:
-        print("❌ 失敗:", data)
+        print("[FAILED]", data)
 
 if __name__ == "__main__":
     main()

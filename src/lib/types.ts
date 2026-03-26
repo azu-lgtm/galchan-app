@@ -47,6 +47,7 @@ export interface GalMaterials {
   description: string    // 概要欄（固定テンプレ含む）
   metaTags: string       // カンマ区切りメタタグ
   pinComment: string     // 固定コメント
+  workerMessage?: string // ワーカーさんへの編集メモ（任意）
   productList?: GalProduct[]  // 商品系スタイル時のみ
   serialNumber?: string  // 【外ガルN】採番
 }

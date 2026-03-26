@@ -420,7 +420,7 @@ def get_channel_analytics(token):
             "ids": f"channel=={CHANNEL_ID}",
             "startDate": start.isoformat(),
             "endDate": end.isoformat(),
-            "metrics": "views,estimatedMinutesWatched,subscribersGained,subscribersLost",
+            "metrics": "views,estimatedMinutesWatched,subscribersGained,subscribersLost,averageViewDuration",
             "dimensions": "day",
             "sort": "day",
         },
@@ -444,7 +444,7 @@ def get_video_analytics(token, video_ids):
             "ids": f"channel=={CHANNEL_ID}",
             "startDate": start.isoformat(),
             "endDate": end.isoformat(),
-            "metrics": "views,estimatedMinutesWatched,averageViewDuration,subscribersGained",
+            "metrics": "views,estimatedMinutesWatched,averageViewDuration,subscribersGained,averageViewPercentage",
             "dimensions": "video",
             "filters": f"video=={ids_str}",
             "sort": "-views",
@@ -512,8 +512,8 @@ def build_analytics_md(channel_data, video_data, realtime_data=None):
             "",
             f"> Analytics: 過去30日（昨日まで） / リアルタイム統計: {today()} 時点",
             "",
-            "| タイトル | 投稿日 | 総再生数(RT) | 高評価 | コメント | 30日再生(Analytics) | 平均視聴(秒) | 登録者増 |",
-            "|---|---|---|---|---|---|---|---|",
+            "| タイトル | 投稿日 | 総再生数(RT) | 高評価 | コメント | 30日再生(Analytics) | 平均視聴(秒) | 視聴維持率(%) | 登録者増 |",
+            "|---|---|---|---|---|---|---|---|---|",
         ]
         # リアルタイムデータを基準に全動画をリスト
         all_ids = list(realtime_data.keys()) if realtime_data else list(video_data.keys())
@@ -527,8 +527,9 @@ def build_analytics_md(channel_data, video_data, realtime_data=None):
             comment  = f"{rt.get('commentCount', '-'):,}" if rt.get("commentCount") is not None else "-"
             view_an  = f"{int(an.get('views', 0)):,}" if an.get("views") else "-"
             avg_dur  = f"{int(an.get('averageViewDuration', 0))}" if an.get("averageViewDuration") else "-"
+            avg_pct  = f"{an.get('averageViewPercentage', 0):.1f}" if an.get("averageViewPercentage") else "-"
             sub_gain = f"+{int(an.get('subscribersGained', 0))}" if an.get("subscribersGained") else "-"
-            lines.append(f"| {title} | {pub_date} | {view_rt} | {like} | {comment} | {view_an} | {avg_dur} | {sub_gain} |")
+            lines.append(f"| {title} | {pub_date} | {view_rt} | {like} | {comment} | {view_an} | {avg_dur} | {avg_pct} | {sub_gain} |")
         lines.append("")
     return "\n".join(lines) + "\n"
 
