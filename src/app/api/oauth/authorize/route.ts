@@ -5,6 +5,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/yt-analytics.readonly',
+  'https://www.googleapis.com/auth/youtube.readonly',
 ]
 
 export async function GET() {

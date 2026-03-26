@@ -21,13 +21,13 @@
 - `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\台本ルール\台本生成ルール.md`
   → TSV形式・登場人物名・SE配置・禁止事項・FINAL CHECK項目
 
-**トーン・構造基準（分析原本）:**
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\分析結果\勝ちパターン統合版_20260325.md`
-  → テーマタイプ別トピック数、テンポ設計、感情動線パターン
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\分析結果\_原本保管\競合台本構造分析_20260325.md`
-  → 冒頭パターン、エンディングパターン、感情ピーク配置
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\分析結果\_原本保管\台本構成分析_20260325.md`
-  → キャラクター運用、1トピック行数、コメント誘導パターン
+**トーン・構造基準（分析原本 — Globで最新を取得）:**
+- `分析結果/勝ちパターン統合版_*.md`（最新1件）→ テーマタイプ別トピック数、テンポ設計、感情動線パターン
+- `分析結果/_原本保管/競合台本構造分析_*.md`（最新1件）→ 冒頭パターン、エンディングパターン、感情ピーク配置
+- `分析結果/_原本保管/台本構成分析_*.md`（最新1件）→ キャラクター運用、1トピック行数、コメント誘導パターン
+
+> **Globベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
+> **0件の場合は即停止。** レビュー不可としてユーザーに報告。
 
 **トーン比較用（競合文字起こし2本）:**
 - テーマに近い競合文字起こしを `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\競合分析\台本文字起こし\` から選んで各30行読む
