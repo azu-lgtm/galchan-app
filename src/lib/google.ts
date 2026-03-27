@@ -9,6 +9,7 @@ import { google } from 'googleapis'
 import { Readable } from 'stream'
 import type { GalMaterials, ScriptStyle } from './types'
 import { SCRIPT_STYLE_LABELS } from './types'
+import type { ChannelAnalytics, VideoAnalytics } from './youtube-analytics'
 
 function getAuth() {
   const client = new google.auth.OAuth2(
@@ -216,6 +217,103 @@ export async function uploadTsvToDrive(
   })
 
   return { id: res.data.id!, url: res.data.webViewLink! }
+}
+
+// ── アナリティクスデータをスプレッドシートに書き込む ──────────────────────────
+const SHEET_ANALYTICS = 'アナリティクス'
+
+/**
+ * 管理スプレッドシートの「アナリティクス」シートにデータを上書き書き込む
+ *
+ * 構成:
+ *   Row 1: チャンネルサマリーヘッダー
+ *   Row 2: チャンネルサマリー値
+ *   Row 3: 空行
+ *   Row 4: 動画別データヘッダー
+ *   Row 5+: 動画別データ
+ */
+export async function writeAnalyticsToSheet(
+  channel: ChannelAnalytics,
+  videos: VideoAnalytics[],
+): Promise<void> {
+  const auth = getAuth()
+  const sheets = google.sheets({ version: 'v4', auth })
+  const today = new Date().toISOString().split('T')[0]
+
+  // シートが存在するか確認、なければ作成
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID_GALCHAN,
+    fields: 'sheets.properties.title',
+  })
+  const sheetExists = spreadsheet.data.sheets?.some(
+    s => s.properties?.title === SHEET_ANALYTICS,
+  )
+  if (!sheetExists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID_GALCHAN,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: SHEET_ANALYTICS } } }],
+      },
+    })
+  }
+
+  // データをクリア
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SPREADSHEET_ID_GALCHAN,
+    range: `${SHEET_ANALYTICS}!A1:L500`,
+  })
+
+  const { totals, daily } = channel
+
+  // チャンネルサマリー
+  const summaryHeader = ['更新日', '期間', '総再生数', '総視聴時間(分)', '登録者増', '登録者減']
+  const summaryValues = [
+    today,
+    `${channel.period.start} 〜 ${channel.period.end}（${daily.length}日）`,
+    totals.views,
+    totals.estimatedMinutesWatched,
+    `+${totals.subscribersGained}`,
+    `-${totals.subscribersLost}`,
+  ]
+
+  // 動画別データ
+  const videoHeader = [
+    'タイトル', '投稿日', '総再生数', '高評価', 'コメント',
+    '30日再生', '平均視聴(秒)', '視聴維持率(%)', 'インプレッション', 'CTR(%)', '登録者増',
+  ]
+  const videoRows = videos.map(v => {
+    const a = v.analytics
+    const imp = v.impressions
+    return [
+      v.title,
+      v.publishedAt ? v.publishedAt.split('T')[0] : '',
+      v.totalViews,
+      v.likes,
+      v.comments,
+      a?.views ?? '',
+      a?.averageViewDuration ?? '',
+      a?.averageViewPercentage ?? '',
+      imp?.impressions ?? '',
+      imp?.impressionsCtr ?? '',
+      a?.subscribersGained ? `+${a.subscribersGained}` : '',
+    ]
+  })
+
+  // 一括書き込み
+  const allRows = [
+    summaryHeader,
+    summaryValues,
+    [],  // 空行
+    videoHeader,
+    ...videoRows,
+  ]
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID_GALCHAN,
+    range: `${SHEET_ANALYTICS}!A1`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: allRows },
+  })
 }
 
 // ── 動画管理シート用の行を組み立てる ──────────────────────────────────────────
