@@ -44,19 +44,11 @@ __pycache__/
 *.pyc
 *.pyo
 
-# local-tool 一時ファイル
-local-tool/channel_info.json
-local-tool/hdr.json
-local-tool/hdr2.json
-local-tool/headers.txt
-local-tool/preview.json
-local-tool/run_out*.txt
-local-tool/run_result.txt
-local-tool/sheets_list.json
-local-tool/tsv_input/*_done.tsv
-local-tool/*_done.tsv
-local-tool/tsv_input/*.tsv
-local-tool/add_lines*.py
-local-tool/write_tsv*.py
-local-tool/run_log.txt
-local-tool/tsv_input/save_payload.json
+# local-tool（開発ツール・一時ファイル）
+local-tool/*.py
+local-tool/*.json
+local-tool/*.txt
+local-tool/tsv_input/
+
+# data（リサーチ結果等）
+data/
