@@ -3,6 +3,13 @@
 ## プロジェクト概要
 ガルちゃんYouTubeチャンネル運営ツール。台本生成・分析・ネタ出しを自動化。
 
+## Auto-PDCA 共通ルール（全チャンネル横断）
+> 以下のファイルに Detector / Post Tracker / video-history / Playbook / スーパーバイザーの共通ルールを定義。
+> このプロジェクト固有のルールは本ファイル、共通ルールは `_共通/` を参照。
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\_共通\pdca-rules.md`
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\_共通\video-history-format.md`
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\_共通\supervisor-checklist.md`
+
 ## ポート
 - 開発サーバー: **3001**
 
