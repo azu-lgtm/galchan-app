@@ -8,7 +8,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
-import { trackLatestVideo, trackVideo, formatPostTrackingReport } from '@/lib/youtube-post-tracker'
+import { trackLatestVideo, trackVideo, formatPostTrackingReport, type FullStats } from '@/lib/youtube-post-tracker'
+import { addEntry, updateMetrics } from '@/lib/youtube-video-history'
 
 const TRACKER_MD_PATH =
   'C:\\Users\\meiek\\Dropbox\\アプリ\\remotely-save\\obsidian\\02_youtube\\ガルちゃんねる\\自分動画\\投稿後トラッキング.md'
@@ -36,9 +37,36 @@ export async function GET(request: NextRequest) {
 
     const report = formatPostTrackingReport(result)
 
+    // video-history に自動連携
+    const publishDate = result.video.publishedAt.split('T')[0]
+    addEntry(result.video.videoId, result.video.title, publishDate)
+
+    if (result.stage === 'full') {
+      const full = result.stats as FullStats
+      updateMetrics(result.video.videoId, {
+        views48h: full.views,
+        ctr: full.impressionsCtr,
+        retention: full.averageViewPercentage,
+        subscribersGained: full.subscribersGained,
+        likes: full.likes,
+        comments: full.comments,
+      })
+    }
+
     if (save) {
-      const { writeFileSync } = await import('fs')
-      writeFileSync(TRACKER_MD_PATH, report, 'utf-8')
+      const { existsSync, readFileSync, writeFileSync } = await import('fs')
+
+      // 蓄積型: 既存ファイルがあれば日時付きセクションとして先頭に追記
+      const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+      const separator = `\n---\n\n`
+      const dated = `<!-- ${timestamp} -->\n${report}`
+
+      if (existsSync(TRACKER_MD_PATH)) {
+        const existing = readFileSync(TRACKER_MD_PATH, 'utf-8')
+        writeFileSync(TRACKER_MD_PATH, dated + separator + existing, 'utf-8')
+      } else {
+        writeFileSync(TRACKER_MD_PATH, dated, 'utf-8')
+      }
     }
 
     return NextResponse.json({

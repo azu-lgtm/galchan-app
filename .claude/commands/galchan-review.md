@@ -29,6 +29,10 @@
 > **Globベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
 > **0件の場合は即停止。** レビュー不可としてユーザーに報告。
 
+**運用知見（過去の成功/失敗パターン）:**
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\運用知見.md`
+  → 構成・維持率の知見（C系）を参照し、過去の失敗パターンに該当していないかチェック
+
 **トーン比較用（競合文字起こし2本）:**
 - テーマに近い競合文字起こしを `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\競合分析\台本文字起こし\` から選んで各30行読む
   → **台本のトーンが競合と同等かを判断する基準**

@@ -182,6 +182,47 @@ export function getUnfetchedEntries(): VideoHistoryEntry[] {
   return readHistory().filter(e => !e.metricsFetched)
 }
 
+// ── 変更履歴ログ（サムネ/タイトル変更のCTR追跡） ──────────────────────────────────
+
+const CHANGELOG_PATH =
+  'C:\\Users\\meiek\\Dropbox\\アプリ\\remotely-save\\obsidian\\02_youtube\\ガルちゃんねる\\自分動画\\変更履歴.md'
+
+export interface ChangeLogEntry {
+  videoId: string
+  timestamp: string
+  changeType: 'サムネ変更' | 'タイトル変更' | 'サムネ+タイトル変更'
+  before: string
+  after: string
+  ctrBefore: string
+  ctrAfter: string
+  note: string
+}
+
+/**
+ * サムネ/タイトル変更とCTR変化を蓄積記録する
+ */
+export function logChange(entry: ChangeLogEntry): void {
+  const dir = dirname(CHANGELOG_PATH)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+
+  const newEntry = `\n## ${entry.timestamp} — ${entry.changeType}\n` +
+    `- **動画**: ${entry.videoId}\n` +
+    `- **Before**: ${entry.before}\n` +
+    `- **After**: ${entry.after}\n` +
+    `- **CTR**: ${entry.ctrBefore} → ${entry.ctrAfter}\n` +
+    `- **メモ**: ${entry.note}\n`
+
+  if (existsSync(CHANGELOG_PATH)) {
+    const existing = readFileSync(CHANGELOG_PATH, 'utf-8')
+    writeFileSync(CHANGELOG_PATH, existing + newEntry, 'utf-8')
+  } else {
+    const header = `# 変更履歴（サムネ/タイトル変更とCTR追跡）\n\n` +
+      `> サムネ・タイトルを変更した際の前後比較を蓄積。\n` +
+      `> 「この変更でCTRがどう変わったか」を記録してPlaybookに活かす。\n`
+    writeFileSync(CHANGELOG_PATH, header + newEntry, 'utf-8')
+  }
+}
+
 // ── レポート生成 ──────────────────────────────────
 
 export function formatHistorySummary(): string {

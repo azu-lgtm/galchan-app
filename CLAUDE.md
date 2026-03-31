@@ -63,6 +63,9 @@
 | `/galchan-ideas` | ネタ出し | Yahoo知恵袋・X追加、パイプラインデータフロー対応、品質ゲート追加 |
 | `/galchan-script` | 台本生成 | リサーチソース拡充（ガルちゃんweb/知恵袋/X）、品質ゲート追加 |
 | `/galchan-review` | 台本レビュー | 変更なし |
+| `/galchan-detector` | 週次異常検知 | 前週比で再生数・視聴時間・登録者を比較。動画別CTR・維持率チェック |
+| `/galchan-post-tracker` | 投稿後トラッキング | 48h未満=初動、48h以降=フル判定。video-historyに自動連携 |
+| `/galchan-video-history` | 投稿履歴管理 | 動画ごとの成績テーブル（Playbookの材料） |
 
 ## パイプライン（推奨実行順序 — データフロー付き）
 ```

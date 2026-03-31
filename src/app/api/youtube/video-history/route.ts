@@ -15,7 +15,9 @@ import {
   updateWeeklyViews,
   getUnfetchedEntries,
   formatHistorySummary,
+  logChange,
   type MetricsUpdate,
+  type ChangeLogEntry,
 } from '@/lib/youtube-video-history'
 
 export async function GET(request: NextRequest) {
@@ -69,7 +71,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: '7日再生数を更新しました', entries })
     }
 
+    case 'log-change': {
+      const { changeType, before, after, ctrBefore, ctrAfter, note } = body
+      if (!videoId || !changeType) {
+        return NextResponse.json({ error: 'videoId と changeType が必要です' }, { status: 400 })
+      }
+      const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+      logChange({
+        videoId,
+        timestamp,
+        changeType,
+        before: before ?? '',
+        after: after ?? '',
+        ctrBefore: ctrBefore ?? '-',
+        ctrAfter: ctrAfter ?? '-',
+        note: note ?? '',
+      } as ChangeLogEntry)
+      return NextResponse.json({ message: '変更履歴を記録しました' })
+    }
+
     default:
-      return NextResponse.json({ error: `不明なaction: ${action}。add / update-metrics / update-weekly を指定してください` }, { status: 400 })
+      return NextResponse.json({ error: `不明なaction: ${action}。add / update-metrics / update-weekly / log-change を指定してください` }, { status: 400 })
   }
 }

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "galchan-app",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "3001", "-H", "0.0.0.0"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3001"],
       "port": 3001
     }
   ]

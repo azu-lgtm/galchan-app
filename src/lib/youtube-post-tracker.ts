@@ -413,11 +413,16 @@ async function runFullCheck(
     // 平均取得失敗は無視
   }
 
+  // Reporting API CTR（翌日以降に利用可能）
+  const reportingData = await fetchReportingCtr(video.videoId)
+
   const fullStats: FullStats = {
     views,
     likes,
     comments,
     hoursAgo: video.hoursAgo,
+    reportingCtr: reportingData?.ctr ?? null,
+    reportingImpressions: reportingData?.impressions ?? null,
     impressions,
     impressionsCtr,
     averageViewPercentage,

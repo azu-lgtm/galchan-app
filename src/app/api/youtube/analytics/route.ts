@@ -39,8 +39,23 @@ export async function GET(request: NextRequest) {
 
     // Obsidian + スプレッドシートに保存
     if (save) {
-      const { writeFileSync } = await import('fs')
+      const { existsSync, readFileSync, writeFileSync } = await import('fs')
+
+      // 最新データは上書き（いつでも最新を見れるように）
       writeFileSync(ANALYTICS_MD_PATH, markdown, 'utf-8')
+
+      // スナップショットを蓄積（PDCA用の変化追跡）
+      const HISTORY_PATH = ANALYTICS_MD_PATH.replace('アナリティクス.md', 'アナリティクス履歴.md')
+      const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+      const snapshot = `<!-- ${timestamp} -->\n${markdown}\n---\n\n`
+
+      if (existsSync(HISTORY_PATH)) {
+        const existing = readFileSync(HISTORY_PATH, 'utf-8')
+        writeFileSync(HISTORY_PATH, snapshot + existing, 'utf-8')
+      } else {
+        writeFileSync(HISTORY_PATH, `# アナリティクス履歴\n> 取得ごとのスナップショットを蓄積。PDCAの変化追跡用。\n\n---\n\n${snapshot}`, 'utf-8')
+      }
+
       await writeAnalyticsToSheet(channel, videos)
     }
 

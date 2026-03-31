@@ -26,8 +26,19 @@ export async function GET(request: NextRequest) {
     const report = formatDetectorReport(result)
 
     if (save) {
-      const { writeFileSync } = await import('fs')
-      writeFileSync(DETECTOR_MD_PATH, report, 'utf-8')
+      const { existsSync, readFileSync, writeFileSync } = await import('fs')
+
+      // 蓄積型: 日時付きセクションとして先頭に追記
+      const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+      const separator = `\n---\n\n`
+      const dated = `<!-- ${timestamp} -->\n${report}`
+
+      if (existsSync(DETECTOR_MD_PATH)) {
+        const existing = readFileSync(DETECTOR_MD_PATH, 'utf-8')
+        writeFileSync(DETECTOR_MD_PATH, dated + separator + existing, 'utf-8')
+      } else {
+        writeFileSync(DETECTOR_MD_PATH, dated, 'utf-8')
+      }
     }
 
     return NextResponse.json({
