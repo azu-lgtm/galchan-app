@@ -95,12 +95,23 @@ def validate(tsv_path: str) -> dict:
                 long_lines += 1
                 if long_lines <= 3:
                     issues.append({"rule": "1行長すぎ（警告）", "line": i, "detail": f"{text_len}字。35字基本、たまに70字を推奨"})
-            elif 0 < text_len < 20:
+            elif 0 < text_len < 30:
                 short_lines += 1
-                if short_lines <= 3:
-                    issues.append({"rule": "1行短すぎ（警告）", "line": i, "detail": f"{text_len}字。35字基本を推奨"})
+                if short_lines <= 5:
+                    severity = "重大" if text_len < 15 else "警告"
+                    issues.append({"rule": f"1行短すぎ（{severity}）", "line": i, "detail": f"{text_len}字。最低30字、35字基本を推奨"})
     stats["long_lines"] = long_lines
     stats["short_lines"] = short_lines
+
+    # --- 1e-2. 65字以上の行（深い体験談行）の割合チェック ---
+    deep_lines = sum(1 for p in parsed if p["speaker"] not in ("ナレーション", "タイトル", "") and len(p["text"]) >= 65)
+    body_count = sum(1 for p in parsed if p["speaker"] not in ("ナレーション", "タイトル", ""))
+    if body_count > 0:
+        deep_ratio = deep_lines / body_count * 100
+        stats["deep_lines"] = deep_lines
+        stats["deep_ratio"] = round(deep_ratio, 1)
+        if deep_ratio < 10:
+            issues.append({"rule": "深い体験談行不足（警告）", "line": 0, "detail": f"65字以上の行が{deep_lines}件（{deep_ratio:.1f}%）。20-30%を推奨（35字基本、たまに70字）"})
 
     # --- 1f. 体験談の年齢チェック ---
     age_pattern = re.compile(r"\d{2}歳")
