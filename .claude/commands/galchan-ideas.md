@@ -8,6 +8,22 @@
 - 引数あり: `/galchan-analyze` の出力ファイルパスが渡された場合、そのファイルも読み込む
 - 引数なし: 分析原本のみで実行
 
+## 実行ゲート（DB読み込み確認・必須）
+
+> このスキルの実行前にDB/rules/とDB/logs/の必要ファイルを読み込む。
+> 1つでも読めなければ即停止してユーザーに報告する。
+
+**ベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
+
+**必須読み込み:**
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\勝ちパターン.md`
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md`
+- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md`
+
+**確認:** 上記ファイルを全て読み込んだか？ → Yes: 次のステップへ / No: 停止してユーザーに報告
+
+---
+
 ## 手順
 
 ### 1. 分析原本 + 最新分析結果の読み込み（ディレクター）
@@ -18,25 +34,25 @@
 0. 引数で渡された `/galchan-analyze` の出力ファイル（ある場合）
    → **拾うもの:** 最新のAポジション有効性、競合の新動向、伸びた/落ちた動画の仮説
 
-**分析原本（Globで最新を取得）:**
-1. `分析結果/勝ちパターン統合版_*.md`（最新1件）
+**分析原本:**
+1. `DB/rules/勝ちパターン.md`（直接Read）
    → **拾うもの:** Aポジション（未開拓領域）、バズりやすいテーマタイプ、感情ワードの効果、テーマタイプ別トピック数
 2. `分析結果/_原本保管/競合網羅分析_*.md`（最新1件）
    → **拾うもの:** サムネ×タイトル相乗効果パターン、視聴者心理（認知的不協和・損失回避）、未開拓ギャップ一覧
 
-> **Globベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
-> **0件の場合は即停止。** 「{ファイル名}が見つかりません」とユーザーに報告。
+> **ベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
+> **ファイルが存在しない場合は即停止。** 「{ファイル名}が見つかりません」とユーザーに報告。
 3. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\ガル分析\` フォルダ内の**最新ファイル**（Glob で日付順に取得し、最新1-2ファイルを読む）
    → **拾うもの:** 直近の分析結果・差別化ポジション・優先テーマ
 
 **運用知見（テーマ別成績パターン）:**
-4. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\運用知見.md`
+4. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md`
    → **拾うもの:** テーマ別成績テーブル（どのテーマタイプがCTR/維持率が高いか）。スコアリング時にテーマ適性を加味する
 4. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\アナリティクス.md`
    → **拾うもの:** 実CTRデータ・視聴維持率・どのテーマが実際に伸びたか
 
 **重複避け:**
-5. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\ネタ候補\ネタ候補リスト.md`
+5. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md`
 6. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\競合分析\競合チャンネルリスト.md`
 7. 既存台本フォルダのファイル名一覧（ネタかぶり防止）
 
@@ -143,7 +159,7 @@
 
 ### 6. Obsidianへの追記
 
-`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\ネタ候補\ネタ候補リスト.md` に追記（上書きではなく末尾に追加）：
+`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md` に追記（上書きではなく末尾に追加）：
 
 ```markdown
 ## YYYY-MM-DD 追加分
@@ -156,3 +172,26 @@
 ```
 
 追記完了後に★★★のネタをピックアップして報告。
+
+---
+
+## 完走後メタチェック（自動実行）
+
+> スキル完走後に自動で実行する軽量チェック。問題があればユーザーに報告する。
+
+### チェック項目
+1. **ルールとの矛盾**: 今回の実行中にDB/rules/のルールと矛盾する判断をしなかったか？
+2. **ルールの不足**: 今回の実行で「こういうルールがあれば迷わなかった」という場面はなかったか？
+3. **ログ→ルール昇格候補**: DB/logs/運用知見.mdの知見を今回も参照した場合、ルール化すべきほど頻繁に使われていないか？
+4. **数値基準のズレ**: 今回の実行結果が、DB/rules/の数値基準と大きくズレていないか？
+
+### 報告フォーマット
+問題がなければ報告不要（サイレント）。問題があった場合のみ：
+
+```
+⚠️ メタチェック検出:
+- [矛盾/不足/昇格候補/基準ズレ]: 内容
+- 推奨アクション: ...
+```
+
+→ ユーザーが承認したらDB/rules/を更新する。承認なしに更新しない。
