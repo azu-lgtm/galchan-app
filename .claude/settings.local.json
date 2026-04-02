@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "mcp__plugin_discord_discord__reply",
+      "WebFetch(domain:docs.google.com)",
+      "mcp__plugin_discord_discord__download_attachment"
+    ]
+  }
+}
