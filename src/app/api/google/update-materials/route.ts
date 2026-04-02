@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { serialNumber, titles, thumbnails, description } = body
+    const { serialNumber, titles, thumbnails, description, metaTags, pinComment, workerMessage } = body
 
     if (!serialNumber) {
       return NextResponse.json({ error: 'serialNumber は必須です' }, { status: 400 })
@@ -74,6 +74,15 @@ export async function POST(request: NextRequest) {
     if (description) {
       updates.push({ range: `${SHEET_MANAGEMENT}!K${rowIndex}`, values: [[description]] })
     }
+    if (metaTags) {
+      updates.push({ range: `${SHEET_MANAGEMENT}!L${rowIndex}`, values: [[metaTags]] })
+    }
+    if (pinComment) {
+      updates.push({ range: `${SHEET_MANAGEMENT}!M${rowIndex}`, values: [[pinComment]] })
+    }
+    if (workerMessage) {
+      updates.push({ range: `${SHEET_MANAGEMENT}!N${rowIndex}`, values: [[workerMessage]] })
+    }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: '更新するデータがありません' }, { status: 400 })
@@ -94,6 +103,9 @@ export async function POST(request: NextRequest) {
         thumbnail: thumbnails?.[0] ?? null,
         title: titles?.[0] ?? null,
         description: description ? '更新済み' : null,
+        metaTags: metaTags ? '更新済み' : null,
+        pinComment: pinComment ? '更新済み' : null,
+        workerMessage: workerMessage ? '更新済み' : null,
       },
     })
   } catch (e) {
