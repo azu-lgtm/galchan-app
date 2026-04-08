@@ -2,19 +2,31 @@
 
 video-history に蓄積されたデータから、成功パターン・失敗パターン・テーマ別成績を自動で抽出する。
 
-## 実行ゲート（DB読み込み確認・必須）
+## Step 0: 実行ゲート（必須・スキップ禁止）
 
-> このスキルの実行前にDB/rules/とDB/logs/の必要ファイルを読み込む。
-> 1つでも読めなければ即停止してユーザーに報告する。
+> **⚠️ このステップを完了せずに次に進むことは絶対禁止。1ファイルでも読めなければ即停止。**
 
-**ベースパス:** `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\`
+### 0-1. 必須ファイル読み込み（Readツールで実際に開く）
+以下のファイルを **Readツールで1つずつ実際に開いて読む**。「記憶にある」「前に読んだ」は無効。毎回必ず読み直す。
 
-**必須読み込み:**
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\勝ちパターン.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\video-history.md`
+| # | ファイル | フルパス |
+|---|---------|---------|
+| 1 | 勝ちパターン.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\勝ちパターン.md` |
+| 2 | 運用知見.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md` |
+| 3 | video-history.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\video-history.md` |
 
-**確認:** 上記ファイルを全て読み込んだか？ → Yes: 次のステップへ / No: 停止してユーザーに報告
+### 0-2. ゲートレポート出力（必須）
+全ファイル読み込み後、以下を出力してからStep 1に進む。出力しないで進むことは禁止。
+
+```
+📋 ゲートレポート
+- [ファイル名]: ✅ 読み込み済み（最終更新: YYYY-MM-DD、キーデータ: [ファイルから1つ具体的な数値や項目を引用]）
+- ...
+→ 全ファイル読み込み完了。Step 1 に進む。
+```
+
+### 0-3. 実行チェックリスト確認
+`実行チェックリスト.md`（`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\実行チェックリスト.md`）を読み、本タスクに該当するタスクタイプ（A〜F）の必須チェック項目を把握する。
 
 ---
 
@@ -63,6 +75,31 @@ Playbook生成後、以下のファイルと照合して整合性を確認する
 - video-history に metrics_fetched: true のエントリが必要
 - エントリが少ない段階では「データ蓄積中」と表示される
 - テーマタイプが `-` の動画はテーマ別集計に含まれない → 手動でテーマを設定すると精度が上がる
+
+---
+
+## Step 6: 実行ログ記録（必須・スキップ禁止）
+
+以下の内容を `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\実行ログ.md` の先頭（`<!-- 新しいログは先頭に追記する -->` の直後）に追記する。
+
+```
+### YYYY-MM-DD HH:MM | /galchan-playbook
+- **タスクタイプ:** [A〜F]
+- **読み込んだDB:** [実際に読んだファイル名のリスト]
+- **主な出力:** [1行で概要]
+- **違反検出:** なし / [具体的な違反内容]
+- **品質スコア:** [該当する場合のみ]
+- **次アクション:** [必要な場合のみ]
+```
+
+---
+
+### status.md更新（必須）
+DB/logs/status.mdを読み、以下を更新:
+- 該当ステップに [x] チェックを入れる
+- 「次にやること」を更新
+- 決定事項があれば「直近の決定事項」に追記
+- 最終更新日を今日の日付に変更
 
 ---
 

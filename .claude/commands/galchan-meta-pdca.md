@@ -11,26 +11,41 @@
 
 ---
 
-## Step 0: DB読み込み（実行ゲート）
+## Step 0: 実行ゲート（必須・スキップ禁止）
 
-以下を全て読み込む。1つでも読めなければ停止してユーザーに報告。
+> **⚠️ このステップを完了せずに次に進むことは絶対禁止。1ファイルでも読めなければ即停止。**
 
-**DB/rules/（全7ファイル）:**
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\戦略.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\分析ルール.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\ネタ出しルール.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\サムネタイトルルール.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\台本ルール.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\トラッキング基準.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\勝ちパターン.md`
+### 0-1. 必須ファイル読み込み（Readツールで実際に開く）
+以下のファイルを **Readツールで1つずつ実際に開いて読む**。「記憶にある」「前に読んだ」は無効。毎回必ず読み直す。
 
-**DB/logs/（全6ファイル）:**
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\video-history.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\投稿後トラッキング.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\playbook.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md`
-- `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\Detectorレポート.md`
+| # | ファイル | フルパス |
+|---|---------|---------|
+| 1 | 戦略.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\戦略.md` |
+| 2 | 分析ルール.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\分析ルール.md` |
+| 3 | ネタ出しルール.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\ネタ出しルール.md` |
+| 4 | サムネタイトルルール.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\サムネタイトルルール.md` |
+| 5 | 台本ルール.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\台本ルール.md` |
+| 6 | トラッキング基準.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\トラッキング基準.md` |
+| 7 | 勝ちパターン.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\勝ちパターン.md` |
+| 8 | 運用知見.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\運用知見.md` |
+| 9 | video-history.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\video-history.md` |
+| 10 | 投稿後トラッキング.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\投稿後トラッキング.md` |
+| 11 | playbook.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\playbook.md` |
+| 12 | ネタ候補.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md` |
+| 13 | Detectorレポート.md | `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\Detectorレポート.md` |
+
+### 0-2. ゲートレポート出力（必須）
+全ファイル読み込み後、以下を出力してからStep 1に進む。出力しないで進むことは禁止。
+
+```
+📋 ゲートレポート
+- [ファイル名]: ✅ 読み込み済み（最終更新: YYYY-MM-DD、キーデータ: [ファイルから1つ具体的な数値や項目を引用]）
+- ...
+→ 全ファイル読み込み完了。Step 1 に進む。
+```
+
+### 0-3. 実行チェックリスト確認
+`実行チェックリスト.md`（`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\rules\実行チェックリスト.md`）を読み、本タスクに該当するタスクタイプ（A〜F）の必須チェック項目を把握する。
 
 ---
 
@@ -157,3 +172,19 @@ DB自体の健全性をチェック:
 1. 更新したファイル一覧
 2. 次回メタPDCAの推奨実行日（1ヶ月後）
 3. 次回までに注視すべきポイント
+
+---
+
+## Step 5: 実行ログ記録（必須・スキップ禁止）
+
+以下の内容を `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\実行ログ.md` の先頭（`<!-- 新しいログは先頭に追記する -->` の直後）に追記する。
+
+```
+### YYYY-MM-DD HH:MM | /galchan-meta-pdca
+- **タスクタイプ:** [A〜F]
+- **読み込んだDB:** [実際に読んだファイル名のリスト]
+- **主な出力:** [1行で概要]
+- **違反検出:** なし / [具体的な違反内容]
+- **品質スコア:** [該当する場合のみ]
+- **次アクション:** [必要な場合のみ]
+```
