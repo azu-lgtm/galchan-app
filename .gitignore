@@ -56,3 +56,4 @@ data/
 # Backup & external tools (2026-04-15)
 *.bak
 .letta/
+temp_*
