@@ -272,6 +272,70 @@ tags: [galchan, analytics]
   return md
 }
 
+/**
+ * 視聴者属性（年齢・性別）を取得（直近28日）
+ */
+export async function fetchDemographics(days: number = 28): Promise<Array<{ ageGroup: string; gender: string; percentage: number }>> {
+  const auth = getAuth()
+  const ytAnalytics = google.youtubeAnalytics({ version: 'v2', auth })
+
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - days)
+
+  try {
+    const res = await ytAnalytics.reports.query({
+      ids: 'channel==MINE',
+      startDate: formatDate(start),
+      endDate: formatDate(end),
+      metrics: 'viewerPercentage',
+      dimensions: 'ageGroup,gender',
+      sort: '-viewerPercentage',
+    })
+
+    return (res.data.rows ?? []).map((row: (string | number)[]) => ({
+      ageGroup: String(row[0]),
+      gender: String(row[1]),
+      percentage: Number(Number(row[2]).toFixed(1)),
+    }))
+  } catch (err) {
+    console.error('Demographics query failed:', err)
+    return []
+  }
+}
+
+/**
+ * トラフィックソースを取得（直近28日）
+ */
+export async function fetchTrafficSources(days: number = 28): Promise<Array<{ source: string; views: number; watchMinutes: number }>> {
+  const auth = getAuth()
+  const ytAnalytics = google.youtubeAnalytics({ version: 'v2', auth })
+
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - days)
+
+  try {
+    const res = await ytAnalytics.reports.query({
+      ids: 'channel==MINE',
+      startDate: formatDate(start),
+      endDate: formatDate(end),
+      metrics: 'views,estimatedMinutesWatched',
+      dimensions: 'insightTrafficSourceType',
+      sort: '-views',
+    })
+
+    return (res.data.rows ?? []).map((row: (string | number)[]) => ({
+      source: String(row[0]),
+      views: Number(row[1]),
+      watchMinutes: Math.round(Number(row[2])),
+    }))
+  } catch (err) {
+    console.error('Traffic sources query failed:', err)
+    return []
+  }
+}
+
 function formatDate(d: Date): string {
   return d.toISOString().split('T')[0]
 }

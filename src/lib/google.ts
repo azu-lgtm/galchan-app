@@ -344,7 +344,7 @@ export function buildManagementRow(
     materials.pinComment,           // M: 固定コメント
     null,                           // N: 視聴維持率ピーク（手動）
     topic.angle,                    // O: 切り口
-    styleLabel,                     // P: 動画企画の型
-    materials.workerMessage ?? '',  // Q: ワーカーメッセージ
+    materials.workerMessage ?? '',  // P: ワーカーへメッセージ
+    styleLabel,                     // Q: 動画企画の型
   ]
 }

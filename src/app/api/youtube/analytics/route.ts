@@ -13,6 +13,8 @@ import { isAuthenticated } from '@/lib/auth'
 import {
   fetchChannelAnalytics,
   fetchVideoAnalytics,
+  fetchDemographics,
+  fetchTrafficSources,
   formatAsObsidianMarkdown,
 } from '@/lib/youtube-analytics'
 import { writeAnalyticsToSheet } from '@/lib/google'
@@ -30,10 +32,37 @@ export async function GET(request: NextRequest) {
   const save = searchParams.get('save') === 'true'
 
   try {
-    const [channel, videos] = await Promise.all([
+    const [channel, videos, demographics, trafficSources] = await Promise.all([
       fetchChannelAnalytics(days),
       fetchVideoAnalytics(30),
+      fetchDemographics(28),
+      fetchTrafficSources(28),
     ])
+
+    // Reporting API経由でCTR・インプレッション取得（Analytics API v2では取得不可）
+    let reportingData: { videos?: Array<{ videoId: string; impressions: number; ctr: number }> } | null = null
+    try {
+      const baseUrl = request.url.split('/api/')[0]
+      const reportingRes = await fetch(`${baseUrl}/api/youtube/reporting-fetch`, {
+        headers: { Cookie: `gc_auth_token=authenticated` },
+      })
+      if (reportingRes.ok) {
+        reportingData = await reportingRes.json()
+      }
+    } catch {
+      // Reporting API失敗は無視（CTR/IMP無しで続行）
+    }
+
+    // CTR・インプレッションを動画データにマージ
+    if (reportingData?.videos) {
+      const impMap = new Map(reportingData.videos.map(v => [v.videoId, v]))
+      for (const video of videos) {
+        const imp = impMap.get(video.videoId)
+        if (imp) {
+          video.impressions = { impressions: imp.impressions, impressionsCtr: Math.round(imp.ctr * 10) / 10 }
+        }
+      }
+    }
 
     const markdown = formatAsObsidianMarkdown(channel, videos)
 
@@ -62,6 +91,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       channel,
       videos,
+      demographics,
+      trafficSources,
       markdown: save ? undefined : markdown,
       savedTo: save ? ANALYTICS_MD_PATH : undefined,
       message: save

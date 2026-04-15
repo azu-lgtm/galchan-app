@@ -1,10 +1,15 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "mcp__plugin_discord_discord__reply",
       "WebFetch(domain:docs.google.com)",
-      "mcp__plugin_discord_discord__download_attachment"
+      "mcp__plugin_discord_discord__download_attachment",
+      "mcp__claude_ai_Canva__search-designs",
+      "mcp__claude_ai_Canva__get-design-pages",
+      "mcp__claude_ai_Canva__get-design-content",
+      "mcp__claude_ai_Canva__start-editing-transaction",
+      "mcp__claude_ai_Canva__perform-editing-operations",
+      "mcp__claude_ai_Canva__cancel-editing-transaction"
     ]
   }
 }
