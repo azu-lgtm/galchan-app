@@ -4,7 +4,8 @@
  * - 未設定（ローカル開発）→ data/prompts-galchan.json にフォールバック
  */
 
-import type { GalPromptsStore } from './types'
+import type { GalPromptsStore, GalReplySettings } from './types'
+import { DEFAULT_GAL_REPLY_SETTINGS } from './types'
 
 const KV_URL = process.env.KV_REST_API_URL
 const KV_TOKEN = process.env.KV_REST_API_TOKEN
@@ -14,6 +15,7 @@ const KEYS = {
   prompts: 'gc:prompts',
   counter: 'gc:counter',
   analytics: 'gc:analytics',
+  replySettings: 'gc:reply_settings',
 } as const
 
 function isKVAvailable(): boolean {
@@ -120,4 +122,43 @@ export async function getAnalyticsFromStore(): Promise<string> {
 
 export async function saveAnalyticsToStore(data: string): Promise<void> {
   await kvSet(KEYS.analytics, data)
+}
+
+// ── Reply Settings ────────────────────────────────────────────────────────────
+
+export async function getReplySettingsFromStore(): Promise<GalReplySettings> {
+  const kvData = await kvGet<GalReplySettings>(KEYS.replySettings)
+  if (kvData) return { ...DEFAULT_GAL_REPLY_SETTINGS, ...kvData }
+
+  // ローカルJSONフォールバック
+  try {
+    const { readFileSync } = await import('fs')
+    const { join } = await import('path')
+    const raw = readFileSync(
+      join(process.cwd(), 'data', 'reply_settings-galchan.json'),
+      'utf-8',
+    )
+    return { ...DEFAULT_GAL_REPLY_SETTINGS, ...(JSON.parse(raw) as GalReplySettings) }
+  } catch {
+    return { ...DEFAULT_GAL_REPLY_SETTINGS }
+  }
+}
+
+export async function saveReplySettingsToStore(settings: GalReplySettings): Promise<void> {
+  if (isKVAvailable()) {
+    await kvSet(KEYS.replySettings, settings)
+    return
+  }
+  // ローカルJSONフォールバック
+  try {
+    const { writeFileSync } = await import('fs')
+    const { join } = await import('path')
+    writeFileSync(
+      join(process.cwd(), 'data', 'reply_settings-galchan.json'),
+      JSON.stringify(settings, null, 2),
+      'utf-8',
+    )
+  } catch (err) {
+    console.error('reply_settings-galchan.json write error:', err)
+  }
 }

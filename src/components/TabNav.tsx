@@ -9,7 +9,7 @@ interface TabNavProps {
 
 const TABS = [
   { id: 'tab1' as Tab, label: '台本生成', icon: '✏️' },
-  { id: 'tab2' as Tab, label: 'チャンネル', icon: '📺' },
+  { id: 'tab2' as Tab, label: 'コメント返信', icon: '💬' },
   { id: 'tab3' as Tab, label: '設定', icon: '⚙️' },
 ]
 

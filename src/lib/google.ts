@@ -154,11 +154,11 @@ export async function fillProductSheet(
 /**
  * 動画管理シート（自分チャンネル・動画管理表）に1行追記する
  *
- * 列マッピング（row10ヘッダーに対応）:
- *   A: 外注依頼  ← 空（手動入力）
+ * 列マッピング（row10ヘッダーに対応・2026-04-20 実シート読取で訂正）:
+ *   A: ワーカー（外注依頼）  ← 空（手動入力）
  *   B: 納品期限  ← 空（手動入力）
  *   C: 納品      ← 空（手動入力）
- *   D: ダウン    ← 空（手動入力）
+ *   D: ダウンロード ← 空（手動入力）
  *   E: 投稿日    ← 空（手動入力）
  *   F: 台本名    ← 【外ガルN台本】
  *   G: 台本リンク← コピーしたスプレッドシートのURL
@@ -168,10 +168,10 @@ export async function fillProductSheet(
  *   K: 概要欄    ← description
  *   L: メタタグ  ← metaTags
  *   M: 固定コメント ← pinComment
- *   N: 視聴維持率ピークの内容 ← 空（手動入力）
- *   O: 切り口    ← topic.angle
- *   P: 動画企画の型 ← style label
- *   Q: ワーカーメッセージ ← materials.workerMessage（任意）
+ *   N: ワーカーへメッセージ ← materials.workerMessage
+ *   O: 視聴維持率ピークの内容 ← 空（手動入力）
+ *   P: 切り口    ← topic.angle
+ *   Q: 動画企画の型 ← style label
  */
 export async function appendToManagementSheet(row: (string | null)[]): Promise<void> {
   const auth = getAuth()
@@ -329,10 +329,10 @@ export function buildManagementRow(
   const styleLabel = SCRIPT_STYLE_LABELS[style]
 
   return [
-    null,                           // A: 外注依頼（手動）
+    null,                           // A: ワーカー（手動）
     null,                           // B: 納品期限（手動）
     null,                           // C: 納品（手動）
-    null,                           // D: ダウン（手動）
+    null,                           // D: ダウンロード（手動）
     null,                           // E: 投稿日（手動）
     scriptName,                     // F: 台本名
     scriptSpreadsheetUrl,           // G: 台本リンク
@@ -342,9 +342,9 @@ export function buildManagementRow(
     materials.description,          // K: 概要欄
     materials.metaTags,             // L: メタタグ
     materials.pinComment,           // M: 固定コメント
-    null,                           // N: 視聴維持率ピーク（手動）
-    topic.angle,                    // O: 切り口
-    materials.workerMessage ?? '',  // P: ワーカーへメッセージ
+    materials.workerMessage ?? '',  // N: ワーカーへメッセージ（2026-04-20訂正）
+    null,                           // O: 視聴維持率ピーク（手動）
+    topic.angle,                    // P: 切り口
     styleLabel,                     // Q: 動画企画の型
   ]
 }

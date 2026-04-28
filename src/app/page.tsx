@@ -6,7 +6,7 @@ import TabNav from '@/components/TabNav'
 import GalDashboard from '@/components/tab1/GalDashboard'
 import GalTopicsView from '@/components/tab1/GalTopicsView'
 import GalScriptResult from '@/components/tab1/GalScriptResult'
-import ChannelDummy from '@/components/tab2/ChannelDummy'
+import CommentReply from '@/components/tab2/CommentReply'
 import SettingsDummy from '@/components/tab3/SettingsDummy'
 import type { GalTopicCandidate, CategorizedTopics, ScriptStyle } from '@/lib/types'
 
@@ -175,8 +175,8 @@ export default function HomePage() {
           </>
         )}
 
-        {/* TAB 2: チャンネル（ダミー） */}
-        {activeTab === 'tab2' && <ChannelDummy />}
+        {/* TAB 2: コメント返信 */}
+        {activeTab === 'tab2' && <CommentReply />}
 
         {/* TAB 3: 設定 */}
         {activeTab === 'tab3' && <SettingsDummy />}

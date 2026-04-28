@@ -13,6 +13,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
+      <head>
+        <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
+      </head>
       <body>{children}</body>
     </html>
   )

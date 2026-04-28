@@ -83,9 +83,33 @@ export interface GalMaterialsPrompts {
   product_list_extraction: string
 }
 
+export interface GalCommentReplyPrompt {
+  name: string
+  content: string
+}
+
 export interface GalPromptsStore {
   script: GalScriptPrompts
   materials: GalMaterialsPrompts
+  comment_reply?: GalCommentReplyPrompt
+}
+
+// ── Comment Reply ─────────────────────────────────────────────────────────────
+
+export interface GalReplySettings {
+  name: string
+  persona: string
+  tone: 'friendly' | 'formal' | 'casual'
+  length: 'short' | 'medium' | 'long'
+  customRules: string
+}
+
+export const DEFAULT_GAL_REPLY_SETTINGS: GalReplySettings = {
+  name: 'ガル運営',
+  persona: '40代後半の女性チャンネル運営者',
+  tone: 'friendly',
+  length: 'medium',
+  customRules: '',
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
