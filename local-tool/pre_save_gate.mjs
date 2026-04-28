@@ -997,6 +997,117 @@ async function main() {
     pass('健康台本 ワーカー調整指示セクション混入なし');
   }
 
+  // ═══ 19. 🆕 アルファベット略語禁止（2026-04-28追加・自ガル12「PB」事件） ═══
+  // VOICEVOX読み上げで「ピービー」「エヌビー」等になる略語を全件検出
+  if (script && channel === 'galchan') {
+    const FORBIDDEN_ABBR = [
+      { word: 'PB', full: 'プライベートブランド' },
+      { word: 'NB', full: 'ナショナルブランド' },
+      { word: 'OEM', full: '他社ブランド供給品' },
+      { word: 'ODM', full: '設計まで他社委託品' },
+      { word: 'PSE', full: '電気用品安全法マーク' },
+      { word: 'QC', full: '品質管理' },
+      { word: 'HC', full: 'ホームセンター' },
+      { word: 'DS', full: 'ドラッグストア' },
+      { word: 'SC', full: 'ショッピングセンター' },
+      { word: 'GMS', full: '総合スーパー' },
+      { word: 'EC', full: '通販/ネット通販' },
+    ];
+    const tsvLinesA = script.split('\n').filter(l => l.includes('\t'));
+    const abbrHits = [];
+    for (let i = 0; i < tsvLinesA.length; i++) {
+      const cols = tsvLinesA[i].split('\t');
+      const body = cols[1] ?? '';
+      for (const { word, full } of FORBIDDEN_ABBR) {
+        const re = new RegExp(`\\b${word}\\b`);
+        if (re.test(body)) {
+          abbrHits.push(`L${i + 1}「${word}」→「${full}」に置換: ${body.substring(0, 50)}`);
+        }
+      }
+    }
+    if (abbrHits.length > 0) {
+      fail(`アルファベット略語禁止違反 ${abbrHits.length}件`,
+           `VOICEVOX読み上げで不自然になる。\n${abbrHits.slice(0, 5).join('\n')}\nfeedback_galchan_no_abbreviation_and_tail_repetition.md 参照`);
+    }
+    pass('アルファベット略語禁止 違反なし');
+  }
+
+  // ═══ 20. 🆕 語尾連続/「〜の。」連発禁止（2026-04-28追加・自ガル12「〜の。」事件） ═══
+  // 「〜の。」連続2行まで・同一末尾2文字3行連続禁止
+  if (script && channel === 'galchan') {
+    const tsvLinesB = script.split('\n').filter(l => l.includes('\t'));
+    const bodies = tsvLinesB.map(l => (l.split('\t')[1] ?? '').trim());
+    const speakers = tsvLinesB.map(l => (l.split('\t')[0] ?? '').trim());
+    const isMainBody = (i) =>
+      speakers[i] !== 'ナレーション' && speakers[i] !== 'タイトル' && bodies[i].length > 0;
+
+    // 末尾2文字（句点除く）取得
+    const tailOf = (s) => {
+      const stripped = s.replace(/[。！？!?]+$/u, '');
+      return stripped.slice(-2);
+    };
+
+    // (a) 「〜の。」終わり連続3行検出
+    const noEndings = [];
+    let consecNo = 0;
+    for (let i = 0; i < bodies.length; i++) {
+      if (!isMainBody(i)) { consecNo = 0; continue; }
+      const isNoEnd = /の[。！？!?]?$/u.test(bodies[i]);
+      if (isNoEnd) {
+        consecNo++;
+        if (consecNo >= 3) {
+          noEndings.push(`L${i - 1}〜L${i + 1}「〜の。」連続${consecNo}行: ${bodies[i].substring(0, 30)}`);
+        }
+      } else {
+        consecNo = 0;
+      }
+    }
+    if (noEndings.length > 0) {
+      fail(`「〜の。」終わり連続3行以上 ${noEndings.length}件`,
+           `${noEndings.slice(0, 3).join('\n')}\n別語尾(〜なんだよ/〜だしね/〜って思った/〜なんだよね)に置換`);
+    }
+    pass('「〜の。」連続3行 違反なし');
+
+    // (b) 同一末尾2文字 連続3行検出（ナレーション・タイトル・空行は除外）
+    const tailHits = [];
+    let lastTail = '';
+    let consecTail = 0;
+    let consecStart = -1;
+    for (let i = 0; i < bodies.length; i++) {
+      if (!isMainBody(i)) {
+        consecTail = 0;
+        lastTail = '';
+        continue;
+      }
+      const t = tailOf(bodies[i]);
+      if (t.length >= 2 && t === lastTail) {
+        consecTail++;
+        if (consecTail >= 3) {
+          tailHits.push(`L${consecStart + 1}〜L${i + 1}「${t}」末尾連続${consecTail}行: ${bodies[i].substring(0, 30)}`);
+        }
+      } else {
+        consecTail = 1;
+        lastTail = t;
+        consecStart = i;
+      }
+    }
+    if (tailHits.length > 0) {
+      fail(`同一末尾2文字 連続3行以上 ${tailHits.length}件`,
+           `${tailHits.slice(0, 3).join('\n')}\n語尾バリエーション必須(台本ルール.md「語尾バリエーションルール」参照)`);
+    }
+    pass('同一末尾2文字 連続3行 違反なし');
+
+    // (c) 「〜の。」終わり全体出現率 20%超 → WARN
+    const totalMain = bodies.filter((_, i) => isMainBody(i)).length;
+    const noEndCount = bodies.filter((b, i) => isMainBody(i) && /の[。！？!?]?$/u.test(b)).length;
+    const ratio = totalMain > 0 ? (noEndCount / totalMain) : 0;
+    if (ratio > 0.2) {
+      console.warn(`⚠️  WARN: 「〜の。」終わり率 ${(ratio * 100).toFixed(1)}%（上限20%・${noEndCount}/${totalMain}行）→ 別語尾に分散推奨`);
+    } else {
+      pass(`「〜の。」終わり率 ${(ratio * 100).toFixed(1)}%（上限20%以内）`);
+    }
+  }
+
   console.log(`\n🟢 PASS: 全チェック通過`);
 }
 
