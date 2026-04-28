@@ -16,6 +16,8 @@ const KEYS = {
   counter: 'gc:counter',
   analytics: 'gc:analytics',
   replySettings: 'gc:reply_settings',
+  doneVideos: 'gc:done_videos',
+  skippedComments: 'gc:skipped_comments',
 } as const
 
 function isKVAvailable(): boolean {
@@ -161,4 +163,56 @@ export async function saveReplySettingsToStore(settings: GalReplySettings): Prom
   } catch (err) {
     console.error('reply_settings-galchan.json write error:', err)
   }
+}
+
+// ── Done Videos（コメント返信完了動画リスト・端末間共有）─────────────────────
+
+export async function getDoneVideosFromStore(): Promise<string[]> {
+  const data = await kvGet<string[]>(KEYS.doneVideos)
+  return data ?? []
+}
+
+export async function addDoneVideoToStore(videoId: string): Promise<void> {
+  const current = await getDoneVideosFromStore()
+  if (!current.includes(videoId)) {
+    await kvSet(KEYS.doneVideos, [...current, videoId])
+  }
+}
+
+export async function clearDoneVideosFromStore(): Promise<void> {
+  await kvSet(KEYS.doneVideos, [])
+}
+
+// ── Skipped Comments（videoId → commentId[] のマップ・端末間共有）─────────────
+
+export type SkippedCommentsMap = Record<string, string[]>
+
+export async function getSkippedCommentsFromStore(): Promise<SkippedCommentsMap> {
+  const data = await kvGet<SkippedCommentsMap>(KEYS.skippedComments)
+  return data ?? {}
+}
+
+export async function setSkippedCommentsForVideo(
+  videoId: string,
+  commentIds: string[],
+): Promise<void> {
+  const current = await getSkippedCommentsFromStore()
+  if (commentIds.length === 0) {
+    delete current[videoId]
+  } else {
+    current[videoId] = Array.from(new Set(commentIds))
+  }
+  await kvSet(KEYS.skippedComments, current)
+}
+
+export async function clearSkippedCommentsForVideo(videoId: string): Promise<void> {
+  const current = await getSkippedCommentsFromStore()
+  if (current[videoId]) {
+    delete current[videoId]
+    await kvSet(KEYS.skippedComments, current)
+  }
+}
+
+export async function clearAllSkippedComments(): Promise<void> {
+  await kvSet(KEYS.skippedComments, {})
 }

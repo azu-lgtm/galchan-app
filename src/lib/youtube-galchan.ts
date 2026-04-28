@@ -180,6 +180,161 @@ export async function getCompetitorTopics(): Promise<{ channelName: string; vide
     .map(r => r.value)
 }
 
+// ── 自チャンネル動画一覧 / コメント取得・投稿（健康chから完全移植）────────────
+
+/**
+ * 自チャンネルの最新動画一覧を取得（コメント返信用・OAuth不要・APIキーのみ）
+ * 健康ch getChannelVideosForOwner と同等
+ */
+export async function getOwnerChannelVideos(
+  channelId: string,
+  maxResults = 30,
+) {
+  // channels.list で uploadsPlaylistId 取得
+  const channelUrl = new URL(`${BASE_URL}/channels`)
+  channelUrl.searchParams.set('part', 'contentDetails')
+  channelUrl.searchParams.set('id', channelId)
+  channelUrl.searchParams.set('key', YOUTUBE_API_KEY)
+
+  const channelRes = await fetch(channelUrl.toString(), { cache: 'no-store' })
+  if (!channelRes.ok) throw new Error(`YouTube channel API error: ${channelRes.status}`)
+  const channelData = await channelRes.json()
+  const uploadsPlaylistId =
+    channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
+  if (!uploadsPlaylistId) return []
+
+  const playlistUrl = new URL(`${BASE_URL}/playlistItems`)
+  playlistUrl.searchParams.set('part', 'snippet')
+  playlistUrl.searchParams.set('playlistId', uploadsPlaylistId)
+  playlistUrl.searchParams.set('maxResults', String(maxResults))
+  playlistUrl.searchParams.set('key', YOUTUBE_API_KEY)
+
+  const playlistRes = await fetch(playlistUrl.toString(), { cache: 'no-store' })
+  if (!playlistRes.ok) throw new Error(`YouTube playlistItems API error: ${playlistRes.status}`)
+  const playlistData = await playlistRes.json()
+
+  const videoIds = playlistData.items
+    ?.map((item: { snippet: { resourceId: { videoId: string } } }) => item.snippet?.resourceId?.videoId)
+    .filter(Boolean)
+    .join(',')
+  if (!videoIds) return []
+
+  const statsUrl = new URL(`${BASE_URL}/videos`)
+  statsUrl.searchParams.set('part', 'snippet,statistics')
+  statsUrl.searchParams.set('id', videoIds)
+  statsUrl.searchParams.set('key', YOUTUBE_API_KEY)
+
+  const statsRes = await fetch(statsUrl.toString(), { cache: 'no-store' })
+  if (!statsRes.ok) return []
+  const statsData = await statsRes.json()
+  return statsData.items ?? []
+}
+
+/**
+ * 自チャンネルの全コメント取得（OAuth必須・held/pendingコメント含む）
+ * scope: youtube.force-ssl 必要
+ */
+export async function getVideoCommentsOwner(videoId: string, accessToken: string) {
+  const url = new URL(`${BASE_URL}/commentThreads`)
+  url.searchParams.set('part', 'snippet,replies')
+  url.searchParams.set('videoId', videoId)
+  url.searchParams.set('maxResults', '100')
+  url.searchParams.set('order', 'time')
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const errBody = await res.text()
+    throw new Error(`YouTube comments API error: ${res.status} ${errBody}`)
+  }
+  const data = await res.json()
+  return data.items ?? []
+}
+
+/**
+ * 公開動画のコメントをAPIキーのみで取得（競合分析用）
+ */
+export async function getPublicVideoComments(
+  videoId: string,
+  maxResults = 20,
+  order: 'relevance' | 'time' = 'relevance',
+) {
+  const url = new URL(`${BASE_URL}/commentThreads`)
+  url.searchParams.set('part', 'snippet')
+  url.searchParams.set('videoId', videoId)
+  url.searchParams.set('maxResults', String(maxResults))
+  url.searchParams.set('order', order)
+  url.searchParams.set('key', YOUTUBE_API_KEY)
+
+  const res = await fetch(url.toString(), { cache: 'no-store' })
+  if (!res.ok) {
+    const errBody = await res.text()
+    throw new Error(`YouTube public comments API error: ${res.status} ${errBody}`)
+  }
+  const data = await res.json()
+  return (data.items ?? []).map((item: {
+    snippet: {
+      topLevelComment: {
+        snippet: {
+          authorDisplayName: string
+          textDisplay: string
+          likeCount: number
+          publishedAt: string
+        }
+      }
+      totalReplyCount: number
+    }
+  }) => ({
+    author: item.snippet.topLevelComment.snippet.authorDisplayName,
+    text: item.snippet.topLevelComment.snippet.textDisplay
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim(),
+    likeCount: item.snippet.topLevelComment.snippet.likeCount,
+    replyCount: item.snippet.totalReplyCount,
+    publishedAt: item.snippet.topLevelComment.snippet.publishedAt,
+  }))
+}
+
+/**
+ * コメントへの返信投稿（OAuth必須）
+ */
+export async function postCommentReply(
+  parentId: string,
+  text: string,
+  accessToken: string,
+) {
+  const url = new URL(`${BASE_URL}/comments`)
+  url.searchParams.set('part', 'snippet')
+
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      snippet: {
+        parentId,
+        textOriginal: text,
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(`YouTube reply API error: ${JSON.stringify(err)}`)
+  }
+  return res.json()
+}
+
 /** ガルちゃん掲示板スクレイプ: 直近1ヶ月の40代スレッド */
 export async function scrapeGirlsChannel(): Promise<{ title: string; comments: number; url: string }[]> {
   try {

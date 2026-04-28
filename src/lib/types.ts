@@ -118,3 +118,36 @@ export interface AnalyticsInput {
   analyticsText: string    // 貼り付けたアナリティクステキスト
   competitorText: string   // 貼り付けた競合動画データ
 }
+
+// ── YouTube Comment / Video（健康chから完全移植・自動取得型）─────────────────
+
+export interface ChannelVideo {
+  id: string
+  title: string
+  publishedAt: string
+  commentCount: string
+  thumbnailUrl: string
+}
+
+export interface VideoComment {
+  id: string
+  authorName: string
+  authorChannelId?: string
+  text: string
+  publishedAt: string
+  likeCount: number
+  replyCount: number
+  isReplyThread?: boolean  // 視聴者が返信してきたスレッド（最新の子コメントを表示）
+  topLevelText?: string    // 大元コメントのテキスト（コンテキスト表示用）
+}
+
+export interface CommentReply {
+  commentId: string
+  authorName: string
+  commentText: string
+  generatedReply: string
+  edited: boolean
+  posted: boolean
+  regenerating?: boolean
+  posting?: boolean
+}

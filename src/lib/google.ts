@@ -20,6 +20,17 @@ function getAuth() {
   return client
 }
 
+/**
+ * YouTube Data API（OAuthスコープ）用のアクセストークンを取得
+ * youtube.force-ssl スコープが OAuth に含まれている前提
+ */
+export async function getAccessToken(): Promise<string> {
+  const client = getAuth()
+  const { token } = await client.getAccessToken()
+  if (!token) throw new Error('Failed to get Google access token')
+  return token
+}
+
 // ── 定数 ───────────────────────────────────────────────────────────────────────
 const SPREADSHEET_ID_GALCHAN = process.env.SPREADSHEET_ID_GALCHAN ?? ''
 const TEMPLATE_SCRIPT         = process.env.SPREADSHEET_TEMPLATE_SCRIPT ?? ''
@@ -314,6 +325,80 @@ export async function writeAnalyticsToSheet(
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: allRows },
   })
+}
+
+// ── コメント返信用：動画タイトルから台本テキストを取得 ───────────────────────
+/**
+ * 動画タイトルから動画管理シート(J列)を検索し、G列の台本リンクから台本シートの本文を取得する
+ *
+ * 戻り値:
+ *   { script: 'タブ区切り台本テキスト', docUrl: '台本スプシURL', docTitle: '台本名(F列)' }
+ *   見つからなければ null
+ */
+export async function findScriptByVideoTitle(
+  videoTitle: string,
+): Promise<{ script: string; docUrl: string; docTitle: string } | null> {
+  if (!SPREADSHEET_ID_GALCHAN || !videoTitle) return null
+  const auth = getAuth()
+  const sheets = google.sheets({ version: 'v4', auth })
+
+  // 動画管理シートから F=台本名 / G=台本リンク / J=動画タイトル を取得
+  let res
+  try {
+    res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID_GALCHAN,
+      range: `${SHEET_MANAGEMENT}!A:Q`,
+    })
+  } catch (err) {
+    console.error('[findScriptByVideoTitle] management sheet read error:', err)
+    return null
+  }
+
+  const rows = res.data.values ?? []
+  const lowerTitle = videoTitle.toLowerCase()
+
+  let matched: { docTitle: string; docUrl: string } | null = null
+  for (const row of rows) {
+    const docTitle = String(row[5] ?? '')   // F列: 台本名
+    const docUrl   = String(row[6] ?? '')   // G列: 台本リンク
+    const cellTitle = String(row[9] ?? '').toLowerCase()  // J列: 動画タイトル
+    if (!cellTitle || !docUrl) continue
+
+    // 部分一致 (健康chと同じロジック・先頭10文字で判定)
+    const cellHead = cellTitle.substring(0, 10)
+    const titleHead = lowerTitle.substring(0, 10)
+    if (
+      cellHead.length > 0 &&
+      (lowerTitle.includes(cellHead) || cellTitle.includes(titleHead))
+    ) {
+      matched = { docTitle, docUrl }
+      break
+    }
+  }
+
+  if (!matched) return null
+
+  // G列の台本リンクから ID 抽出（ガルchはGoogleSheetsのリンク）
+  const m = matched.docUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  if (!m) return { script: '', docUrl: matched.docUrl, docTitle: matched.docTitle }
+  const linkedId = m[1]
+
+  // 台本シートの A:B（話者・本文）を取得して結合
+  try {
+    const linkRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: linkedId,
+      range: '台本!A4:B1000',
+    })
+    const lines = linkRes.data.values ?? []
+    const script = lines
+      .filter(r => (r[0] ?? '').toString().trim() && (r[1] ?? '').toString().trim())
+      .map(r => `${r[0]}\t${r[1]}`)
+      .join('\n')
+    return { script, docUrl: matched.docUrl, docTitle: matched.docTitle }
+  } catch (err) {
+    console.error('[findScriptByVideoTitle] linked script read error:', err)
+    return { script: '', docUrl: matched.docUrl, docTitle: matched.docTitle }
+  }
 }
 
 // ── 動画管理シート用の行を組み立てる ──────────────────────────────────────────
