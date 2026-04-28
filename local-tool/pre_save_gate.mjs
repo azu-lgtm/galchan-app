@@ -997,10 +997,12 @@ async function main() {
     pass('健康台本 ワーカー調整指示セクション混入なし');
   }
 
-  // ═══ 19. 🆕 アルファベット略語禁止（2026-04-28追加・自ガル12「PB」事件） ═══
-  // VOICEVOX読み上げで「ピービー」「エヌビー」等になる略語を全件検出
+  // ═══ 19. 🆕 アルファベット略語禁止（2026-04-28追加・自ガル12「PB」事件→2026-04-28拡張） ═══
+  // VOICEVOX読み上げで「ピービー」「エヌビー」等になる全略語を網羅的に検出
+  // ハードコード既知NG + 正規表現 \b[A-Z]{2,5}\b で全アルファベット略語をキャッチ
   if (script && channel === 'galchan') {
-    const FORBIDDEN_ABBR = [
+    // 既知NG: 必ず置換指示が出る
+    const KNOWN_FORBIDDEN_ABBR = [
       { word: 'PB', full: 'プライベートブランド' },
       { word: 'NB', full: 'ナショナルブランド' },
       { word: 'OEM', full: '他社ブランド供給品' },
@@ -1013,23 +1015,50 @@ async function main() {
       { word: 'GMS', full: '総合スーパー' },
       { word: 'EC', full: '通販/ネット通販' },
     ];
+    // 例外（読み上げOKと判明済の略語のみ・ここにある略語のみ通す）
+    const ALLOWED_ABBR = new Set([
+      'JR', 'NTT', 'KDDI', 'NHK', 'JA', 'JT', 'TV',
+      'KFC', 'IKEA', 'GAP', 'CD', 'DVD', 'OK', 'NG', 'NO',
+      'JIS', 'JAS', 'NITE', 'PMDA', // 公的機関・規格（カタカナ読み定着）
+      'AI', 'IT', 'PC', 'USB', 'SD', 'HD', 'TV', 'PR', 'CM',
+      'GW', // ゴールデンウィーク慣習化
+    ]);
+
     const tsvLinesA = script.split('\n').filter(l => l.includes('\t'));
-    const abbrHits = [];
+    const knownHits = [];
+    const unknownHits = []; // 既知NG以外の検出された略語（ALLOWEDにないもの）
+
     for (let i = 0; i < tsvLinesA.length; i++) {
       const cols = tsvLinesA[i].split('\t');
       const body = cols[1] ?? '';
-      for (const { word, full } of FORBIDDEN_ABBR) {
+
+      // (a) 既知NG検出
+      for (const { word, full } of KNOWN_FORBIDDEN_ABBR) {
         const re = new RegExp(`\\b${word}\\b`);
         if (re.test(body)) {
-          abbrHits.push(`L${i + 1}「${word}」→「${full}」に置換: ${body.substring(0, 50)}`);
+          knownHits.push(`L${i + 1}「${word}」→「${full}」に置換: ${body.substring(0, 50)}`);
         }
       }
+
+      // (b) 正規表現で全 [A-Z]{2,5} を抽出 → ALLOWEDになければNG扱い
+      const matches = body.match(/\b[A-Z]{2,5}\b/g) ?? [];
+      for (const m of matches) {
+        if (ALLOWED_ABBR.has(m)) continue;
+        // 既知NGに含まれてればそっちで報告済み
+        if (KNOWN_FORBIDDEN_ABBR.some(k => k.word === m)) continue;
+        unknownHits.push(`L${i + 1}「${m}」: ${body.substring(0, 50)}`);
+      }
     }
-    if (abbrHits.length > 0) {
-      fail(`アルファベット略語禁止違反 ${abbrHits.length}件`,
-           `VOICEVOX読み上げで不自然になる。\n${abbrHits.slice(0, 5).join('\n')}\nfeedback_galchan_no_abbreviation_and_tail_repetition.md 参照`);
+
+    if (knownHits.length > 0 || unknownHits.length > 0) {
+      const all = [...knownHits, ...unknownHits];
+      const detail = `VOICEVOX読み上げで不自然になる。\n` +
+        (knownHits.length > 0 ? `【既知NG ${knownHits.length}件】\n${knownHits.slice(0, 5).join('\n')}\n` : '') +
+        (unknownHits.length > 0 ? `【未登録略語 ${unknownHits.length}件・カタカナ化 or ALLOWLIST追加】\n${unknownHits.slice(0, 5).join('\n')}\n` : '') +
+        `合計${all.length}件・feedback_galchan_no_abbreviation_and_tail_repetition.md 参照`;
+      fail(`アルファベット略語禁止違反 ${all.length}件`, detail);
     }
-    pass('アルファベット略語禁止 違反なし');
+    pass('アルファベット略語禁止 違反なし（既知NG+未登録略語 共にゼロ）');
   }
 
   // ═══ 20. 🆕 語尾連続/「〜の。」連発禁止（2026-04-28追加・自ガル12「〜の。」事件） ═══
