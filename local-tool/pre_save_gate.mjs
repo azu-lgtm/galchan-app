@@ -1137,6 +1137,95 @@ async function main() {
     }
   }
 
+  // ═══ 21. 🆕🆕🆕 ガル民呼称＋引用元明示＋法的免責フレーム本文混入禁止（2026-04-28追加・自ガル12ドンキ事件） ═══
+  // ガル台本本文は「普通のスレ民の井戸端会議」。引用元・法的免責フレームの本文混入はFAIL。
+  if (script && channel === 'galchan') {
+    const violations = [];
+
+    // A. ガル民呼称・ガルちゃん自己言及
+    const garuminPatterns = [
+      { re: /ガル民/g, label: 'A1. ガル民呼称（→「うちも〜」「私も〜」「〜って人いるよね」型に置換）' },
+      { re: /ガルちゃん民/g, label: 'A2. ガルちゃん民（→主語ぼかし型に置換）' },
+      { re: /ガルちゃん(で|の|スレ|掲示板)/g, label: 'A3. ガルちゃん自己言及（既存ルール統合・メタ表現NG）' },
+    ];
+    for (const p of garuminPatterns) {
+      const m = [...script.matchAll(p.re)];
+      if (m.length > 0) {
+        violations.push(`${p.label}: ${m.length}件「${m.slice(0, 3).map(x => x[0]).join('/')}」`);
+      }
+    }
+
+    // B. 引用元明示型
+    const citationPatterns = [
+      { re: /知恵袋|Yahoo!?知恵袋|chiebukuro/g, label: 'B1. 知恵袋出典明示（→「〜って言う人も多いよね」型に）' },
+      { re: /SNSで(も|は)?|インスタで(も|は)|Twitter(で|の)|ツイッター(で|の)|X(でも|では)/g, label: 'B2. SNS/Twitter出典明示（→出典ぼかし型に）' },
+      { re: /掲示板で(も|は)?|コメント欄で(も|は)|口コミ(で|の)|ネット(でも|では)/g, label: 'B3. 掲示板/コメント欄/ネット出典明示（→主語ぼかし型に）' },
+    ];
+    for (const p of citationPatterns) {
+      const m = [...script.matchAll(p.re)];
+      if (m.length > 0) {
+        violations.push(`${p.label}: ${m.length}件「${m.slice(0, 3).map(x => x[0]).join('/')}」`);
+      }
+    }
+
+    // C. 法的免責フレーム本文混入
+    const legalFramePatterns = [
+      { re: /個人の感想(として|だけど)/g, label: 'C1. 「個人の感想として/だけど」（→直接主語型「私の肌だと〜」「うちは〜」に）' },
+      { re: /公的裏取り(済|済み)/g, label: 'C2. 「公的裏取り済」（メタ表現・本文NG・内部メモのみ）' },
+      { re: /カテゴリ批判|複数証言ベース|複数のスレで/g, label: 'C3. カテゴリ批判/複数証言ベース（→「よく聞く話よね」「〜って人いるよね」に）' },
+      { re: /これ事実ね/g, label: 'C4. 「これ事実ね」（自己防衛フレーズ・削除）' },
+      { re: /とは断定しない|とは言わない/g, label: 'C5. 「とは断定しない/言わない」（法的免責直書き・自然な接続に置換）' },
+    ];
+    for (const p of legalFramePatterns) {
+      const m = [...script.matchAll(p.re)];
+      if (m.length > 0) {
+        violations.push(`${p.label}: ${m.length}件「${m.slice(0, 3).map(x => x[0]).join('/')}」`);
+      }
+    }
+
+    if (violations.length > 0) {
+      fail(`ガル民呼称＋引用元明示＋法的免責フレーム混入 ${violations.length}件`,
+           `${violations.slice(0, 8).join('\n')}\n→ 台本ルール.md「引用元明示禁止＋ガル民呼称禁止」セクション参照・主語ぼかし型「って言う人も多いよね」「うちも〜」「私も〜」に書き換え`);
+    }
+    pass('ガル民呼称＋引用元明示＋法的免責フレーム 違反なし');
+  }
+
+  // ═══ 22. 🆕 主語ぼかし型フレーズ連発禁止＋〜よ／〜わよね 現代少数派比率上限（2026-04-28追加・自ガル12 v2修正連発事故） ═══
+  if (script && channel === 'galchan') {
+    // (a) 主語ぼかし型フレーズの連発検出
+    const dakeRules = [
+      { pattern: /よく聞く話|よく聞くわ|よく聞く/g, max: 1, label: '「よく聞く話／よく聞く」' },
+      { pattern: /あるあるだよね|あるある(?!の|は|な)/g, max: 1, label: '「あるあるだよね／あるある」' },
+      { pattern: /うちもそう|私もそう/g, max: 2, label: '「うちもそう／私もそう」' },
+      { pattern: /って人(いるよね|多い)/g, max: 2, label: '「〜って人いるよね／多い」' },
+      { pattern: /私の周りで(も|に)/g, max: 1, label: '「私の周りでも／に」' },
+    ];
+    for (const r of dakeRules) {
+      const matches = [...script.matchAll(r.pattern)];
+      if (matches.length > r.max) {
+        fail(`主語ぼかし型フレーズ連発: ${r.label} ${matches.length}回出現（上限${r.max}回）`,
+             `「${matches.slice(0, 3).map(m => m[0]).join('/')}」。分散ストック使い回し（うちもそう／あるある／私の周りでもいた／同じ目に遭ったことある／結構いる／って人多い／ママ友でも／うちの姉も）`);
+      }
+    }
+    pass('主語ぼかし型フレーズ連発チェック（5パターン全て上限内）');
+
+    // (b) 〜よ／〜よね／〜わよね／〜わ／〜だわ 比率上限 30%
+    const tsvLinesC = script.split('\n').filter(l => l.includes('\t'));
+    const bodiesC = tsvLinesC.map(l => (l.split('\t')[1] ?? '').trim());
+    const speakersC = tsvLinesC.map(l => (l.split('\t')[0] ?? '').trim());
+    const isMainC = (i) => speakersC[i] !== 'ナレーション' && speakersC[i] !== 'タイトル' && bodiesC[i].length > 0;
+    const totalMainC = bodiesC.filter((_, i) => isMainC(i)).length;
+    const oldFashionedEnd = bodiesC.filter((b, i) =>
+      isMainC(i) && /(?:よ|よね|わよね|わ|だわ)[。！？!?]?$/u.test(b)
+    ).length;
+    const ratioOld = totalMainC > 0 ? (oldFashionedEnd / totalMainC) : 0;
+    if (ratioOld > 0.30) {
+      fail(`旧式語尾（〜よ／よね／わよね／わ／だわ）比率超過 ${(ratioOld * 100).toFixed(1)}%`,
+           `${oldFashionedEnd}/${totalMainC}行・上限30%。現代風代替: 〜だよ／〜なんだ／〜って思う／〜じゃない？／〜だよね／〜って／〜だ`);
+    }
+    pass(`旧式語尾比率 ${(ratioOld * 100).toFixed(1)}%（上限30%以内）`);
+  }
+
   console.log(`\n🟢 PASS: 全チェック通過`);
 }
 
