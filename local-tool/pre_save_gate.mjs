@@ -1190,6 +1190,67 @@ async function main() {
     pass('ガル民呼称＋引用元明示＋法的免責フレーム 違反なし');
   }
 
+  // ═══ 23. 🆕🆕🆕 商品紹介広告コピー＋製作者目線＋過剰演出＋業界用語 全面禁止（2026-04-29追加・自ガル12 v3 12箇所連発事故） ═══
+  if (script && channel === 'galchan') {
+    const adCopyViolations = [];
+
+    // A. 広告コピー型（大手代替なら/Amazon○○円/ロングセラー）
+    const adCopyPatterns = [
+      { re: /大手代替なら|大手の代替/g, max: 0, label: 'A1. 広告コピー型「大手代替なら〜」' },
+      { re: /Amazon[で\s]\s*\d+[,，]?\d+円台?.*ロングセラー/g, max: 0, label: 'A2. 数値3要素詰め込み（Amazon○○円+ロングセラー）' },
+      { re: /\d+円台.*\d+年(以上の|の)?\s*ロングセラー/g, max: 0, label: 'A3. 価格+年数+ロングセラー型' },
+    ];
+    for (const p of adCopyPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > p.max) {
+        adCopyViolations.push(`${p.label}: ${matches.length}件「${matches.slice(0, 3).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // B. 製作者・ナレーター目線
+    const narratorPatterns = [
+      { re: /あとで話す|理由は後で|マンゴーグミより上にした|より上にした理由/g, label: 'B1. 製作者目線「あとで話す/上にした理由」' },
+      { re: /次のお話は|今日紹介するのは|これから紹介する/g, label: 'B2. 予告調「次のお話は/今日紹介する」' },
+    ];
+    for (const p of narratorPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > 0) {
+        adCopyViolations.push(`${p.label}: ${matches.length}件「${matches.slice(0, 3).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // C. 過剰演出セリフ
+    const overactPatterns = [
+      { re: /気になりすぎて|聞きたくて仕方ない|聞きたくて仕方がない/g, label: 'C1. 過剰演出「気になりすぎて/聞きたくて仕方ない」' },
+      { re: /衝撃で言葉が出ない|マジで今すぐ見直して|もう続きが/g, label: 'C2. 過剰演出「衝撃で言葉/今すぐ見直して」' },
+    ];
+    for (const p of overactPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > 0) {
+        adCopyViolations.push(`${p.label}: ${matches.length}件「${matches.slice(0, 3).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // D. 業界用語・マーケティング解説
+    const businessJargonPatterns = [
+      { re: /業界の常識/g, label: 'D1. 業界用語「業界の常識」' },
+      { re: /客が一番落とす設計|落とす設計|落とすしかけ/g, label: 'D2. 業界用語「客が一番落とす設計」' },
+      { re: /マーケティング戦略|ターゲティング/g, label: 'D3. マーケティング解説「戦略/ターゲティング」' },
+    ];
+    for (const p of businessJargonPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > 0) {
+        adCopyViolations.push(`${p.label}: ${matches.length}件「${matches.slice(0, 3).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    if (adCopyViolations.length > 0) {
+      fail(`商品紹介広告コピー＋製作者目線＋過剰演出＋業界用語 混入 ${adCopyViolations.length}件`,
+           `${adCopyViolations.slice(0, 8).join('\n')}\n→ DB/rules/商品紹介自然パターン集.md 参照・5型（A個人体験+年数曖昧/Bやっぱりこれ/C価格軽く/D流通入手難/Eブランド分散）に置換`);
+    }
+    pass('商品紹介広告コピー＋製作者目線＋過剰演出＋業界用語 違反なし');
+  }
+
   // ═══ 22. 🆕 主語ぼかし型フレーズ連発禁止＋〜よ／〜わよね 現代少数派比率上限（2026-04-28追加・自ガル12 v2修正連発事故） ═══
   if (script && channel === 'galchan') {
     // (a) 主語ぼかし型フレーズの連発検出
