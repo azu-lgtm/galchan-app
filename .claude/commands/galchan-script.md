@@ -586,8 +586,27 @@ python C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\validat
 ### 8-1. TSVファイル
 `C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\tsv_input\【自ガルN台本】{タイトル30字以内}_{YYYYMMDD}.tsv`
 
-### 8-2. Obsidian MD
-`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
+### 8-2. Obsidian MD（🚨🚨🚨 必須・サブエージェント委任時も明示・2026-04-29 自ガル13事故受け強化）
+
+**保存先パス（実運用準拠）:**
+`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
+
+**サブエージェント委任時は以下も同期（必須）:**
+- 検証MD: `【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
+- 素材MD: `【自ガルN台本】{タイトル}_{YYYYMMDD}_materials.md`
+- 保留メモ（あれば）: `【自ガルN】保留メモ_{YYYYMMDD}.md`
+
+**コマンド例:**
+```bash
+cp "C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/tsv_input/【自ガルN台本】{タイトル}_{YYYYMMDD}.md" \
+   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/"
+cp "C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/tsv_input/【自ガルN台本】{タイトル}_{YYYYMMDD}_materials.md" \
+   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/"
+```
+
+**確認: ls でファイルが両方の保存先に存在することを確認**
+
+詳細: `~/.claude/projects/.../memory/feedback_obsidian_sync_mandatory.md`
 
 **フォーマット:**
 ```markdown
