@@ -19,11 +19,11 @@ for (const line of envText.split(/\r?\n/)) {
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 
-const SCRIPT_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9台本】ドラッグストア_v3.md';
-const PRODUCTS_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9】商品リスト_Sheet2.tsv';
-const OUTLINE_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9】概要欄.md';
-const TAGS_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9】メタタグ.md';
-const PINNED_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9】固定コメント.md';
+const SCRIPT_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9台本】ドラッグストア_v3.md';
+const PRODUCTS_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9】商品リスト_Sheet2.tsv';
+const OUTLINE_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9】概要欄.md';
+const TAGS_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9】メタタグ.md';
+const PINNED_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9】固定コメント.md';
 
 const TITLE_OF_VIDEO = '【40代以降は注意】ドラストで毎日使ってた商品が全部根拠なしだった…代わりに買うべき本物リスト(イブ/紅麹/シミ消しクリーム/EMS美顔器/ヘアカラー)【ガルちゃんまとめ】';
 const THEME = 'ドラストの危ない常備品';

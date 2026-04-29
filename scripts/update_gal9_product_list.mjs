@@ -121,7 +121,7 @@ verifyRange.data.values?.forEach((row, i) => {
 })
 
 // 4) TSVファイルにも追記
-const tsvPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9】商品リスト_Sheet2.tsv'
+const tsvPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9】商品リスト_Sheet2.tsv'
 const tsvContent = fs.readFileSync(tsvPath, 'utf8')
 const existingLines = tsvContent.trimEnd().split('\n')
 const newTsvLines = newRows.map(row => row.join('\t'))

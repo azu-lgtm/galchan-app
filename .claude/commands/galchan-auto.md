@@ -205,7 +205,7 @@ Step 5: 完了報告
 `local-tool/tsv_input/【自ガルN台本】{タイトル30字以内}_{YYYYMMDD}.tsv`
 
 ### 4-2. Obsidian MD
-`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
+`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\外注台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
 
 **フォーマット:**
 ```markdown

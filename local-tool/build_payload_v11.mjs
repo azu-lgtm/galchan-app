@@ -6,7 +6,7 @@
  */
 import { readFile, writeFile } from 'fs/promises';
 
-const MD_DIR = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本';
+const MD_DIR = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本';
 const scriptMdPath = `${MD_DIR}/【自ガル11台本v11】ホームセンター_20260424.md`;
 const descMdPath = `${MD_DIR}/【自ガル11】概要欄.md`;
 const pinMdPath = `${MD_DIR}/【自ガル11】固定コメント.md`;

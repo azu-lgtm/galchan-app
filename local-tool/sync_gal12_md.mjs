@@ -5,7 +5,7 @@
 import { readFile, writeFile } from 'fs/promises';
 
 const TSV = 'C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/tsv_input/【自ガル12台本】ドンキ_20260427.tsv';
-const MD = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル12台本v2】ドンキ_20260427.md';
+const MD = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル12台本v2】ドンキ_20260427.md';
 
 const tsv = (await readFile(TSV, 'utf8')).trim();
 const md = await readFile(MD, 'utf8');

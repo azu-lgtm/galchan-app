@@ -9,7 +9,7 @@ for (const line of envText.split(/\r?\n/)) {
 }
 
 const SPREADSHEET_ID = '11Vulc9rWw-RnRcoi_jbWgs58h8pff_Aa4RWO1gBPhnc'
-const TSV_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/台本/【自ガル8台本】更年期セルフケア習慣_20260411_商品リスト.tsv'
+const TSV_PATH = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/外注台本/【自ガル8台本】更年期セルフケア習慣_20260411_商品リスト.tsv'
 
 const oauth2 = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,

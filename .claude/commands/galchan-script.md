@@ -98,7 +98,7 @@
 9. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\DB\logs\ネタ候補.md`
 
 **既存台本の重複チェック:**
-10. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\台本\` 内のファイル名一覧
+10. `C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\外注台本\` 内のファイル名一覧
 
 ---
 
@@ -589,7 +589,7 @@ python C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\validat
 ### 8-2. Obsidian MD（🚨🚨🚨 必須・サブエージェント委任時も明示・2026-04-29 自ガル13事故受け強化）
 
 **保存先パス（実運用準拠）:**
-`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
+`C:\Users\meiek\Dropbox\アプリ\remotely-save\obsidian\02_youtube\ガルちゃんねる\自分動画\自社台本\【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
 
 **サブエージェント委任時は以下も同期（必須）:**
 - 検証MD: `【自ガルN台本】{タイトル}_{YYYYMMDD}.md`
@@ -599,9 +599,9 @@ python C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\validat
 **コマンド例:**
 ```bash
 cp "C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/tsv_input/【自ガルN台本】{タイトル}_{YYYYMMDD}.md" \
-   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/"
+   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/"
 cp "C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/tsv_input/【自ガルN台本】{タイトル}_{YYYYMMDD}_materials.md" \
-   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/"
+   "C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/"
 ```
 
 **確認: ls でファイルが両方の保存先に存在することを確認**

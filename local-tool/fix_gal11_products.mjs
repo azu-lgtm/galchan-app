@@ -21,7 +21,7 @@ for (const line of envRaw.split('\n')) {
 
 const NEW_SPREADSHEET_ID = '1337fLo8LvUAYH7xauUHZRR_ju90pyBwD5WpBMXvTkXM';
 
-const pinMdPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル11】固定コメント.md';
+const pinMdPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル11】固定コメント.md';
 const pinRaw = await readFile(pinMdPath, 'utf8');
 const productBlocks = pinRaw.split(/^■\s+/m).slice(1);
 const productList = productBlocks.map(block => {

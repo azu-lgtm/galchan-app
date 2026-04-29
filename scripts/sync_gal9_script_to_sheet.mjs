@@ -21,7 +21,7 @@ auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
 const sheets = google.sheets({ version: 'v4', auth })
 
 const scriptSheetId = '1vzAeBpDJXOBzKyNhiBWA1xEcVA1vPGOLZZNtNehTgNg'
-const mdPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル9台本】ドラッグストア_v3.md'
+const mdPath = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル9台本】ドラッグストア_v3.md'
 
 // Read Obsidian md
 const md = fs.readFileSync(mdPath, 'utf8')

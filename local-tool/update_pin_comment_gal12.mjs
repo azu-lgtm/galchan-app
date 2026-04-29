@@ -18,7 +18,7 @@ for (const line of envRaw.split('\n')) {
   process.env[k] = v;
 }
 
-const PIN_MD = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自ガル12】固定コメント.md';
+const PIN_MD = 'C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自ガル12】固定コメント.md';
 const MGMT_ID = process.env.SPREADSHEET_ID_GALCHAN;
 const SHEET = '自分チャンネル・動画管理表';
 

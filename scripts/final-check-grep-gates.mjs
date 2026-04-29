@@ -33,7 +33,7 @@ const galN = process.argv[2] || 'gal9'
 const mgmtSheetId = process.env.SPREADSHEET_ID_GALCHAN
 
 // 台本ファイルパス（Obsidian）
-const scriptPath = `C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/台本/【自${galN.replace('gal', 'ガル')}台本】ドラッグストア_v3.md`
+const scriptPath = `C:/Users/meiek/Dropbox/アプリ/remotely-save/obsidian/02_youtube/ガルちゃんねる/自分動画/自社台本/【自${galN.replace('gal', 'ガル')}台本】ドラッグストア_v3.md`
 // ※実際は動的にファイル名検索する必要あり。ここでは自ガル9固定例
 
 const results = { pass: [], fail: [], warn: [] }
