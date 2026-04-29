@@ -1246,7 +1246,7 @@ async function main() {
 
     if (adCopyViolations.length > 0) {
       fail(`商品紹介広告コピー＋製作者目線＋過剰演出＋業界用語 混入 ${adCopyViolations.length}件`,
-           `${adCopyViolations.slice(0, 8).join('\n')}\n→ DB/rules/商品紹介自然パターン集.md 参照・5型（A個人体験+年数曖昧/Bやっぱりこれ/C価格軽く/D流通入手難/Eブランド分散）に置換`);
+           `${adCopyViolations.slice(0, 8).join('\n')}\n→ DB/rules/会話で商品が出る時の自然パターン集.md 参照・5型（A個人体験+年数曖昧/Bやっぱりこれ/C価格軽く/D流通入手難/Eブランド分散）に置換`);
     }
     pass('商品紹介広告コピー＋製作者目線＋過剰演出＋業界用語 違反なし');
   }
@@ -1285,6 +1285,67 @@ async function main() {
            `${oldFashionedEnd}/${totalMainC}行・上限30%。現代風代替: 〜だよ／〜なんだ／〜って思う／〜じゃない？／〜だよね／〜って／〜だ`);
     }
     pass(`旧式語尾比率 ${(ratioOld * 100).toFixed(1)}%（上限30%以内）`);
+  }
+
+  // ═══ 24. 🆕🆕 公的機関措置命令ベース実名露出セーフライン（2026-04-29追加・名誉毀損リスク回避） ═══
+  // 詳細: DB/rules/公的機関措置命令ベース実名露出ルール.md / memory/feedback_real_name_safe_line.md
+  if (script && channel === 'galchan') {
+    const realNameViolations = [];
+
+    // A. 永久ブラックリスト（紅麹・無条件FAIL）
+    const blacklistPatterns = [
+      { re: /紅麹/g, label: 'A1. 永久ブラックリスト「紅麹」（2026-04-29恒久禁止・死亡事故・訴訟係争中）' },
+      { re: /小林製薬.*紅麹|紅麹.*小林製薬/g, label: 'A2. 永久ブラックリスト「小林製薬×紅麹」' },
+      { re: /紅麹.*(死|被害|致命|殺|事故|被害者)/g, label: 'A3. 紅麹+ネガ表現（死亡/被害/致命）' },
+    ];
+    for (const p of blacklistPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > 0) {
+        realNameViolations.push(`${p.label} ${matches.length}件: 「${matches.slice(0, 2).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // B. 命令ネガ（実名と組み合わせなくても全面NG）
+    const commandNegPatterns = [
+      { re: /絶対これ食べるな|絶対これ飲むな|絶対これやめろ|絶対これ買うな/g, label: 'B1. 命令ネガ型「絶対これ食べるな/飲むな/やめろ/買うな」' },
+    ];
+    for (const p of commandNegPatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > 0) {
+        realNameViolations.push(`${p.label} ${matches.length}件: 「${matches.slice(0, 2).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // C. ナレーター/スレ民独自盛り（公的機関情報以外で「ヤバい」断定）
+    const overhypePatterns = [
+      { re: /(マジでヤバい|本当にヤバい|本気でヤバい|めっちゃ危険|ガチで危険|本気で危険)/g, max: 0, label: 'C1. 独自盛り「マジでヤバい/本気で危険」型' },
+    ];
+    for (const p of overhypePatterns) {
+      const matches = [...script.matchAll(p.re)];
+      if (matches.length > p.max) {
+        realNameViolations.push(`${p.label} ${matches.length}件: 「${matches.slice(0, 2).map(m => m[0]).join('/')}」`);
+      }
+    }
+
+    // D. 実名+断定表現セット（実名らしき固有名詞 + 危険/致命/詐欺/殺/死ぬ）
+    // ナレーション・スレ民の本文のみ対象
+    const tsvLinesD = script.split('\n').filter(l => l.includes('\t'));
+    for (const line of tsvLinesD) {
+      const cols = line.split('\t');
+      const body = (cols[1] ?? '').trim();
+      if (!body) continue;
+      // 「○○は危険」「○○は致命的」「○○は詐欺」型
+      const m = body.match(/([ぁ-んァ-ヶ一-龥A-Za-z0-9・ー]{2,15})(は|が|って)\s*[^。]{0,10}(危険|致命的|詐欺|殺された|死ぬ|殺人)/);
+      if (m) {
+        realNameViolations.push(`D1. 実名+断定表現セット: 「${m[0]}」（公的機関事実報道に置換、または実名削除）`);
+      }
+    }
+
+    if (realNameViolations.length > 0) {
+      fail(`公的機関措置命令ベース実名露出セーフライン違反 ${realNameViolations.length}件`,
+           `${realNameViolations.slice(0, 6).join('\n')}\n→ DB/rules/公的機関措置命令ベース実名露出ルール.md 参照・実名出しは公的機関措置命令ベースに限定・断定表現NG・紅麹は恒久禁止`);
+    }
+    pass('公的機関措置命令ベース実名露出セーフライン違反なし（紅麹/命令ネガ/独自盛り/実名+断定）');
   }
 
   console.log(`\n🟢 PASS: 全チェック通過`);
