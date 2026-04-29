@@ -1,0 +1,21 @@
+import { readFileSync, writeFileSync } from 'fs';
+const payload = JSON.parse(readFileSync('local-tool/save_payload_gal13.json', 'utf-8'));
+const m = payload.materials;
+let md = '# 【自ガル13台本】ダイエット 素材（v2: アフィリンク差替版）\n\n';
+md += '> 2026-04-29 自律モード深夜タスク完了版\n';
+md += '> Step 2-3 アフィリンク13件選定+概要欄/固定コメ実URL差替\n\n';
+md += '## YouTubeタイトル\n```\n' + m.titles[0] + '\n```\n（' + [...m.titles[0]].length + '字）\n\n';
+md += '## サムネ確定情報\n```\n' + m.thumbnails[0] + '\n```\n\n';
+md += '## メタタグ\n```\n' + m.metaTags + '\n```\n\n';
+md += '## 概要欄（' + m.description.length + '字 / 5000字以内）\n```\n' + m.description + '\n```\n\n';
+md += '## 固定コメント\n```\n' + m.pinComment + '\n```\n\n';
+md += '## ワーカーメッセージ（スリム版テンプレ準拠・{SPREADSHEET_URL}は保存後実URLに差替）\n```\n' + m.workerMessage + '\n```\n\n';
+md += '## アフィリンク選定リスト（' + m.productList.length + '件）\n\n';
+md += '| # | 商品名 | カテゴリ | Amazon | 楽天 |\n|---|---|---|---|---|\n';
+m.productList.forEach((p, i) => {
+  md += '| ' + (i+1) + ' | ' + p.name + ' | ' + p.category + ' | [link](' + p.amazonLink + ') | [link](' + p.rakutenLink + ') |\n';
+});
+md += '\n## 動画管理シートメモ（Q列）\n```\n' + m.managementMemo + '\n```\n\n';
+md += '## トピック情報\n- title: ' + payload.topic.title + '\n- angle: ' + payload.topic.angle + '\n- source: ' + payload.topic.source + '\n- category: ' + payload.topic.category + '\n';
+writeFileSync('local-tool/tsv_input/【自ガル13台本】ダイエット_20260429_materials.md', md, 'utf-8');
+console.log('素材MD v2書き出し完了 (' + md.length + '字)');
