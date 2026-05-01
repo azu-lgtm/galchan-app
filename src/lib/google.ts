@@ -165,7 +165,7 @@ export async function fillProductSheet(
 /**
  * 動画管理シート（自分チャンネル・動画管理表）に1行追記する
  *
- * 列マッピング（row10ヘッダーに対応・2026-04-20 実シート読取で訂正）:
+ * 列マッピング（row10ヘッダーに対応・2026-05-01 実シート再検証で訂正）:
  *   A: ワーカー（外注依頼）  ← 空（手動入力）
  *   B: 納品期限  ← 空（手動入力）
  *   C: 納品      ← 空（手動入力）
@@ -180,9 +180,9 @@ export async function fillProductSheet(
  *   L: メタタグ  ← metaTags
  *   M: 固定コメント ← pinComment
  *   N: ワーカーへメッセージ ← materials.workerMessage
- *   O: 視聴維持率ピークの内容 ← 空（手動入力）
- *   P: 切り口    ← topic.angle
- *   Q: 動画企画の型 ← style label
+ *   O: 切り口    ← topic.angle（旧コメント「視聴維持率ピーク」は誤り・実シートでは O列=切り口）
+ *   P: 動画企画の型 ← style label（旧コメント「P=切り口」は誤り）
+ *   Q: メモ      ← materials.managementMemo（旧コメント「Q=動画企画の型」は誤り）
  */
 export async function appendToManagementSheet(row: (string | null)[]): Promise<void> {
   const auth = getAuth()
@@ -428,8 +428,8 @@ export function buildManagementRow(
     materials.metaTags,             // L: メタタグ
     materials.pinComment,           // M: 固定コメント
     materials.workerMessage ?? '',  // N: ワーカーへメッセージ（2026-04-20訂正）
-    null,                           // O: 視聴維持率ピーク（手動）
-    topic.angle,                    // P: 切り口
-    styleLabel,                     // Q: 動画企画の型
+    topic.angle,                    // O: 切り口（2026-05-01訂正・実シートヘッダー再検証）
+    styleLabel,                     // P: 動画企画の型（2026-05-01訂正）
+    materials.managementMemo ?? '', // Q: メモ（2026-05-01訂正・元コメント「Q: 動画企画の型」は誤り）
   ]
 }

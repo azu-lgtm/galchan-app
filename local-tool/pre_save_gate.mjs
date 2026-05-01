@@ -1137,6 +1137,32 @@ async function main() {
     }
   }
 
+  // ═══ 20.5 🆕 「〜んだ」進行形不自然語尾検出（2026-05-01追加・自ガル13「言ってるんだ」事件） ═══
+  // 進行形+んだ型(言ってるんだ・証言してるんだ・報告されてるんだ等)は不自然・WARN表示
+  if (script && channel === 'galchan') {
+    const ndaPattern = /(てる|られてる|してる|になる|なってる|働いてる|変わってる|出てる|減ってる|増えてる|連動してる)んだ。/;
+    const lines = script.split('\n');
+    const ndaViolations = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.includes('\t')) continue;
+      const parts = line.split('\t');
+      const speaker = parts[0];
+      const text = parts[1] || '';
+      if (speaker === 'ナレーション' || speaker === 'タイトル' || speaker === 'イッチ') continue;
+      if (ndaPattern.test(text)) {
+        const match = text.match(ndaPattern);
+        ndaViolations.push(`L${i + 1}[${speaker}]"${match[0]}"`);
+      }
+    }
+    if (ndaViolations.length > 0) {
+      console.warn(`⚠️  WARN: 進行形+「〜んだ」不自然語尾 ${ndaViolations.length}件・「〜よ」「〜よね」「〜らしい」型に置換推奨`);
+      console.warn(`   詳細: ${ndaViolations.slice(0, 5).join(' / ')}${ndaViolations.length > 5 ? ` 他${ndaViolations.length - 5}件` : ''}`);
+    } else {
+      pass(`進行形+「〜んだ」不自然語尾 違反なし`);
+    }
+  }
+
   // ═══ 21. 🆕🆕🆕 ガル民呼称＋引用元明示＋法的免責フレーム本文混入禁止（2026-04-28追加・自ガル12ドンキ事件） ═══
   // ガル台本本文は「普通のスレ民の井戸端会議」。引用元・法的免責フレームの本文混入はFAIL。
   if (script && channel === 'galchan') {
@@ -1346,6 +1372,48 @@ async function main() {
            `${realNameViolations.slice(0, 6).join('\n')}\n→ DB/rules/公的機関措置命令ベース実名露出ルール.md 参照・実名出しは公的機関措置命令ベースに限定・断定表現NG・紅麹は恒久禁止`);
     }
     pass('公的機関措置命令ベース実名露出セーフライン違反なし（紅麹/命令ネガ/独自盛り/実名+断定）');
+  }
+
+  // ═══ 25. 🆕 GPTs自然度3指標（2026-05-01追加・自ガル13 GPTs分析を機に） ═══
+  // 専門家証言連発・効果数字断定・硬い表現を検出してWARN/FAIL
+  if (script && channel === 'galchan') {
+    // 25.1 専門家証言件数(元○○の)
+    const expertPattern = /元(管理栄養士|看護師|薬剤師|エステ|医療事務|糖尿病外来|歯科衛生士|保健センター|和食料理人|ソムリエ|保健師|理学療法士|栄養士|給食|歯科|エステ勤務|医療職|医師)/g;
+    const expertMatches = [...script.matchAll(expertPattern)];
+    if (expertMatches.length >= 16) {
+      console.warn(`⚠️  WARN: 専門家証言連発 ${expertMatches.length}件（16件以上・台本っぽさ強い）→ 主婦体験談(うちの母/友人/祖母)に2-3件置換推奨`);
+    } else if (expertMatches.length >= 13) {
+      console.warn(`⚠️  WARN: 専門家証言過多 ${expertMatches.length}件（13-15件・許容上限近い）`);
+    } else {
+      pass(`専門家証言件数 ${expertMatches.length}件（許容内）`);
+    }
+
+    // 25.2 効果数字断定パターン(○ヶ月で○キロ落ちた等)
+    const numericResultPattern = /(\d+(?:ヶ月|カ月|週間|年)で[^、。\n]{0,15}?[\d-]+\s*(?:キロ|kg)\s*(?:落ちた|減った|痩せた)|[\d-]+\s*(?:キロ|kg)\s*(?:落ちた|減った|痩せた))/g;
+    const numericMatches = [...script.matchAll(numericResultPattern)];
+    if (numericMatches.length >= 5) {
+      console.warn(`⚠️  WARN: 効果数字断定連発 ${numericMatches.length}件（5件以上・薬機法トーン注意）→ 「変化を感じた」「お腹周りが軽くなった」型に2-3件置換推奨`);
+    } else {
+      pass(`効果数字断定 ${numericMatches.length}件（許容内）`);
+    }
+
+    // 25.3 硬い表現検出
+    const stiffPhrases = [
+      'これが基本ライン', '最大のメリット', '最大のコツ',
+      '確実な選択', '決定的な要因', '唯一の正解',
+      '本物のダイエット習慣', '長期では確実に落ちる', '一番の近道'
+    ];
+    const stiffViolations = [];
+    for (const phrase of stiffPhrases) {
+      if (script.includes(phrase)) {
+        stiffViolations.push(phrase);
+      }
+    }
+    if (stiffViolations.length > 0) {
+      console.warn(`⚠️  WARN: 硬い表現(解説調) ${stiffViolations.length}件: ${stiffViolations.join('/')} → 柔らかい表現(目安にしたいね/続けやすいところかも/結局そこが大きい/まずはここから)に置換推奨`);
+    } else {
+      pass(`硬い表現(解説調) 違反なし`);
+    }
   }
 
   console.log(`\n🟢 PASS: 全チェック通過`);
