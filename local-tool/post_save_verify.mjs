@@ -70,6 +70,10 @@ function pass(msg) {
 }
 
 // ── 1. 商品リストシートD列全埋め検証 ───────────────
+// 🚨 2026-05-02 強化: D列空欄を「手動運用承認済」で waveしないこと（自ガル11/13事故受け）
+//    自ガル13でD列空欄をwaveした結果ユーザー指摘発生。fillProductSheet が
+//    payload.amazonLink/rakutenLink を捨ててたバグを修正済。今後はD列空欄=絶対FAIL。
+//    バックフィル: node fix_gal13_product_links.mjs（自ガル13用・他号は payload を読込んで複製）
 const products = await sheets.spreadsheets.values.get({
   spreadsheetId: NEW_SPREADSHEET_ID,
   range: '商品リスト!A2:D100',
@@ -80,7 +84,7 @@ const linkedCount = prodRows.filter(r => r[1] && r[3] && /https?:\/\//.test(r[3]
 if (prodCount === 0) {
   fail(`商品リストシートが空`);
 } else if (linkedCount < prodCount) {
-  fail(`商品リストD列 アフィリンク抜け: ${prodCount - linkedCount}/${prodCount}件欠落`);
+  fail(`商品リストD列 アフィリンク抜け: ${prodCount - linkedCount}/${prodCount}件欠落 ← payload.materials.productList の amazonLink/rakutenLink が D列に書込まれていない。fillProductSheet バックフィル必須。「D列のみ手動運用」で wave するの絶対禁止（自ガル13事故）`);
 } else {
   pass(`商品リスト ${prodCount}件・全件アフィリンク設置済`);
 }

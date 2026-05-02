@@ -140,12 +140,20 @@ export async function fillProductSheet(
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  const rows = products.map((p, i) => [
-    i + 1,    // No.
-    p.name,   // 商品名
-    '',       // 型番（代表例）← 後で手動入力
-    '',       // 商品リンク   ← 後で手動入力
-  ])
+  // 2026-05-02 fix: D列「商品リンク」を payload から自動埋込（毎回欠落事故の恒久対策）
+  // フォーマット: 自ガル12踏襲「Amazon: <url>\n楽天: <url>」改行区切
+  const rows = products.map((p, i) => {
+    const linkLines: string[] = []
+    if (p.amazonLink && /^https?:\/\//.test(p.amazonLink)) linkLines.push(`Amazon: ${p.amazonLink}`)
+    if (p.rakutenLink && /^https?:\/\//.test(p.rakutenLink)) linkLines.push(`楽天: ${p.rakutenLink}`)
+    const linkCell = linkLines.join('\n')
+    return [
+      i + 1,    // No.
+      p.name,   // 商品名
+      '',       // 型番（代表例）← 後で手動入力
+      linkCell, // 商品リンク（Amazon/楽天 改行区切）
+    ]
+  })
 
   // row2以降のテンプレートデータをクリア
   await sheets.spreadsheets.values.clear({
