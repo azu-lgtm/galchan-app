@@ -334,6 +334,14 @@ WebSearchで「{テーマ} ガルちゃん まとめ YouTube」を検索。
 
 ### 商品リスト
 - 商品名が登場する台本 → スプシの隣シートに商品一覧を別途作成
+- **🚨 商品リストシート列構成（2026-05-02確定・D/E分割）**:
+  - A: No.
+  - B: 商品名
+  - C: 型番（代表例）← 任意
+  - **D: Amazonリンク**（URL単独・自動書込）
+  - **E: 楽天リンク**（URL単独・自動書込）
+- payload.materials.productList の各商品で `amazonLink` と `rakutenLink` **両方必須**（pre_save_gate.mjs FAIL条件）
+- 旧仕様（D列に「Amazon: <url>\n楽天: <url>」改行混在）は廃止。fillProductSheet が自動でD/E分割書込
 
 ### 生成手順
 1. **イントロを書く**（5行）
@@ -705,7 +713,7 @@ node C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\post_save
   --pin-md="<固定コメント.mdの絶対パス>" \
   --wm-md="<ワーカーメッセージ.mdの絶対パス>"
 ```
-- 検証項目: 商品リストD列全埋め / F-Q列空欄なし / N列PLACEHOLDER残存検出 / K/M/N列とローカルMD先頭100字一致 / F列長文混入検出
+- 検証項目: 商品リスト**D列(Amazon)/E列(楽天)両列全埋め**(2026-05-02 D/E分割) / F-Q列空欄なし / N列PLACEHOLDER残存検出 / K/M/N列とローカルMD先頭100字一致 / F列長文混入検出
 - exit 1（FAIL）なら原因特定→修復→再実行
 - 全PASSで保存完了
 

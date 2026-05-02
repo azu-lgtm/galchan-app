@@ -280,12 +280,20 @@ async function main() {
     }
     const posProducts = products.filter(p => (p.category || '').includes('ポジ'));
     if (posProducts.length > 0) {
+      // 🚨 2026-05-02 強化: D=Amazon / E=楽天 分割書込のため、両方必須に変更
+      //    旧: 片方あればPASS (`&&` ロジック) → 自ガル13事故の温床
+      //    新: amazon AND 楽天 両方必須 (`||` ロジックでFAIL検出)
       for (const p of posProducts) {
-        if (!p.amazonLink && !p.rakutenLink) {
-          fail('productList ポジ商品のアフィリンク空', `${p.name} にアフィリンクなし`);
+        const hasAmazon = !!(p.amazonLink && /^https?:\/\//.test(p.amazonLink));
+        const hasRakuten = !!(p.rakutenLink && /^https?:\/\//.test(p.rakutenLink));
+        if (!hasAmazon || !hasRakuten) {
+          const missing = [];
+          if (!hasAmazon) missing.push('amazonLink');
+          if (!hasRakuten) missing.push('rakutenLink');
+          fail('productList ポジ商品のアフィリンク不足', `${p.name}: ${missing.join('+')}空欄。スプシD列(Amazon)/E列(楽天)分割書込で両方必須`);
         }
       }
-      pass(`productList ポジ${posProducts.length}件のみ・全件アフィリンク設定済`);
+      pass(`productList ポジ${posProducts.length}件・全件 Amazon+楽天 両リンク設定済`);
     }
 
     // 7.1 🆕 概要欄アフィリンク密度チェック（2026-04-24追加・自ガル11事故受け）
