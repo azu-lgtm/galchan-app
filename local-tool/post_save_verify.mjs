@@ -69,24 +69,34 @@ function pass(msg) {
   console.log(`✅ ${msg}`);
 }
 
-// ── 1. 商品リストシートD列全埋め検証 ───────────────
-// 🚨 2026-05-02 強化: D列空欄を「手動運用承認済」で waveしないこと（自ガル11/13事故受け）
-//    自ガル13でD列空欄をwaveした結果ユーザー指摘発生。fillProductSheet が
-//    payload.amazonLink/rakutenLink を捨ててたバグを修正済。今後はD列空欄=絶対FAIL。
-//    バックフィル: node fix_gal13_product_links.mjs（自ガル13用・他号は payload を読込んで複製）
+// ── 1. 商品リストシートD/E列全埋め検証 ───────────────
+// 🚨 2026-05-02 強化: D=Amazonリンク / E=楽天リンク 両列に分割（コピー利便性向上）
+//    旧仕様: D列「Amazon: <url>\n楽天: <url>」改行区切
+//    新仕様: D列=Amazonリンクのみ / E列=楽天リンクのみ
+//    自ガル11/13でD列空欄事故 → fillProductSheet 修正済 → D/E両列検証で再発防止
+//    「D列のみ手動運用」「E列なくてもOK」等の例外でwave絶対禁止。
+//    バックフィル: node fix_gal13_product_links.mjs（自ガル13用・他号は payload 読込で複製）
 const products = await sheets.spreadsheets.values.get({
   spreadsheetId: NEW_SPREADSHEET_ID,
-  range: '商品リスト!A2:D100',
+  range: '商品リスト!A2:E100',
 });
 const prodRows = products.data.values || [];
 const prodCount = prodRows.filter(r => r[1]).length;  // 商品名があるか
-const linkedCount = prodRows.filter(r => r[1] && r[3] && /https?:\/\//.test(r[3])).length;
+const dLinkedCount = prodRows.filter(r => r[1] && r[3] && /^https?:\/\//.test(r[3])).length;
+const eLinkedCount = prodRows.filter(r => r[1] && r[4] && /^https?:\/\//.test(r[4])).length;
 if (prodCount === 0) {
   fail(`商品リストシートが空`);
-} else if (linkedCount < prodCount) {
-  fail(`商品リストD列 アフィリンク抜け: ${prodCount - linkedCount}/${prodCount}件欠落 ← payload.materials.productList の amazonLink/rakutenLink が D列に書込まれていない。fillProductSheet バックフィル必須。「D列のみ手動運用」で wave するの絶対禁止（自ガル13事故）`);
 } else {
-  pass(`商品リスト ${prodCount}件・全件アフィリンク設置済`);
+  if (dLinkedCount < prodCount) {
+    fail(`商品リストD列(Amazon) アフィリンク抜け: ${prodCount - dLinkedCount}/${prodCount}件欠落 ← payload.amazonLink が D列に書込まれていない。fillProductSheet バックフィル必須・wave禁止`);
+  } else {
+    pass(`商品リストD列(Amazon) ${prodCount}件・全件設置済`);
+  }
+  if (eLinkedCount < prodCount) {
+    fail(`商品リストE列(楽天) アフィリンク抜け: ${prodCount - eLinkedCount}/${prodCount}件欠落 ← payload.rakutenLink が E列に書込まれていない。fillProductSheet バックフィル必須・wave禁止`);
+  } else {
+    pass(`商品リストE列(楽天) ${prodCount}件・全件設置済`);
+  }
 }
 
 // ── 2. 動画管理シート行のF-Q列空欄チェック ───────────────

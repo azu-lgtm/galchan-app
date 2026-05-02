@@ -140,25 +140,33 @@ export async function fillProductSheet(
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // 2026-05-02 fix: D列「商品リンク」を payload から自動埋込（毎回欠落事故の恒久対策）
-  // フォーマット: 自ガル12踏襲「Amazon: <url>\n楽天: <url>」改行区切
-  const rows = products.map((p, i) => {
-    const linkLines: string[] = []
-    if (p.amazonLink && /^https?:\/\//.test(p.amazonLink)) linkLines.push(`Amazon: ${p.amazonLink}`)
-    if (p.rakutenLink && /^https?:\/\//.test(p.rakutenLink)) linkLines.push(`楽天: ${p.rakutenLink}`)
-    const linkCell = linkLines.join('\n')
-    return [
-      i + 1,    // No.
-      p.name,   // 商品名
-      '',       // 型番（代表例）← 後で手動入力
-      linkCell, // 商品リンク（Amazon/楽天 改行区切）
-    ]
+  // 2026-05-02 fix v2: D=Amazonリンク / E=楽天リンク に分割（コピー利便性のため）
+  // 旧: D列に「Amazon: <url>\n楽天: <url>」改行区切 → D/E分離
+  const amazonLink = (p: typeof products[number]): string =>
+    p.amazonLink && /^https?:\/\//.test(p.amazonLink) ? p.amazonLink : ''
+  const rakutenLink = (p: typeof products[number]): string =>
+    p.rakutenLink && /^https?:\/\//.test(p.rakutenLink) ? p.rakutenLink : ''
+
+  const rows = products.map((p, i) => [
+    i + 1,             // A: No.
+    p.name,            // B: 商品名
+    '',                // C: 型番（代表例）← 後で手動入力
+    amazonLink(p),     // D: Amazonリンク
+    rakutenLink(p),    // E: 楽天リンク
+  ])
+
+  // ヘッダー(row1) D/E列を分割形式に書換（旧「商品リンク」単独 → 「Amazonリンク」「楽天リンク」）
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: '商品リスト!D1:E1',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [['Amazonリンク', '楽天リンク']] },
   })
 
-  // row2以降のテンプレートデータをクリア
+  // row2以降のテンプレートデータをクリア（A:E に拡張）
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: '商品リスト!A2:D1000',
+    range: '商品リスト!A2:E1000',
   })
 
   await sheets.spreadsheets.values.update({
