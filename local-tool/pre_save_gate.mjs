@@ -51,12 +51,20 @@ function pass(label) {
 async function main() {
   const payloadPath = process.argv[2];
   const channel = (process.argv.find(a => a.startsWith('--channel=')) || '--channel=galchan').split('=')[1];
+  // 🆕 2026-05-09 追加: 100均テーマ等のアフィ非対応動画用例外フラグ
+  // ユーザー明示指示「100均はアフィ運用しない」に対応。フラグ付き時のみアフィ件数チェックをスキップ。
+  // 自ガル11事故対策の他項目（テンプレ存在/プレースホルダー/メタタグ/語尾連発/略語禁止 等）は維持。
+  // 使い方: node pre_save_gate.mjs <payload.json> --channel=galchan --skip-affiliate-check
+  const skipAffiliateCheck = process.argv.includes('--skip-affiliate-check');
   if (!payloadPath) fail('payload path required', 'node pre_save_gate.mjs <payload.json>');
 
   const raw = await readFile(payloadPath, 'utf8');
   const payload = JSON.parse(raw);
 
   console.log(`\n🔒 Pre-save Gate [${channel}] ${payloadPath}`);
+  if (skipAffiliateCheck) {
+    console.log('⚠️ --skip-affiliate-check 有効: アフィリンク件数チェックのみスキップ（100均テーマ等のアフィ非対応動画用例外フラグ）');
+  }
 
   // ─── 共通 ───
   const materials = payload.materials || payload;
@@ -279,44 +287,53 @@ async function main() {
       fail('productList にネガ商品混入', `商品リストはポジ商品のみ。ネガ${negProducts.length}件混入（例: ${negProducts[0].name}）`);
     }
     const posProducts = products.filter(p => (p.category || '').includes('ポジ'));
-    if (posProducts.length > 0) {
-      // 🚨 2026-05-02 強化: D=Amazon / E=楽天 分割書込のため、両方必須に変更
-      //    旧: 片方あればPASS (`&&` ロジック) → 自ガル13事故の温床
-      //    新: amazon AND 楽天 両方必須 (`||` ロジックでFAIL検出)
-      for (const p of posProducts) {
-        const hasAmazon = !!(p.amazonLink && /^https?:\/\//.test(p.amazonLink));
-        const hasRakuten = !!(p.rakutenLink && /^https?:\/\//.test(p.rakutenLink));
-        if (!hasAmazon || !hasRakuten) {
-          const missing = [];
-          if (!hasAmazon) missing.push('amazonLink');
-          if (!hasRakuten) missing.push('rakutenLink');
-          fail('productList ポジ商品のアフィリンク不足', `${p.name}: ${missing.join('+')}空欄。スプシD列(Amazon)/E列(楽天)分割書込で両方必須`);
+    // 🆕 2026-05-09: --skip-affiliate-check 時はアフィリンク件数チェックを丸ごとスキップ
+    //   100均テーマ等のアフィ非対応動画用例外フラグ・自ガル11事故対策の他項目は維持
+    if (skipAffiliateCheck) {
+      console.log(`⏭️  アフィリンクチェック群スキップ（--skip-affiliate-check）: productList両リンク必須/概要欄密度/固定コメAmazon+楽天ペア`);
+      if (posProducts.length > 0) {
+        pass(`productList ポジ${posProducts.length}件（アフィリンク件数チェックはスキップ）`);
+      }
+    } else {
+      if (posProducts.length > 0) {
+        // 🚨 2026-05-02 強化: D=Amazon / E=楽天 分割書込のため、両方必須に変更
+        //    旧: 片方あればPASS (`&&` ロジック) → 自ガル13事故の温床
+        //    新: amazon AND 楽天 両方必須 (`||` ロジックでFAIL検出)
+        for (const p of posProducts) {
+          const hasAmazon = !!(p.amazonLink && /^https?:\/\//.test(p.amazonLink));
+          const hasRakuten = !!(p.rakutenLink && /^https?:\/\//.test(p.rakutenLink));
+          if (!hasAmazon || !hasRakuten) {
+            const missing = [];
+            if (!hasAmazon) missing.push('amazonLink');
+            if (!hasRakuten) missing.push('rakutenLink');
+            fail('productList ポジ商品のアフィリンク不足', `${p.name}: ${missing.join('+')}空欄。スプシD列(Amazon)/E列(楽天)分割書込で両方必須`);
+          }
         }
+        pass(`productList ポジ${posProducts.length}件・全件 Amazon+楽天 両リンク設定済`);
       }
-      pass(`productList ポジ${posProducts.length}件・全件 Amazon+楽天 両リンク設定済`);
-    }
 
-    // 7.1 🆕 概要欄アフィリンク密度チェック（2026-04-24追加・自ガル11事故受け）
-    if (products.length > 0 && desc) {
-      const affiliateCount = (desc.match(/tag=garuchannel22-22/g) || []).length;
-      const expectedMin = Math.floor(products.length * 0.8);
-      if (affiliateCount < expectedMin) {
-        fail(`概要欄アフィリンク件数不足`, `concat=${affiliateCount}件 < productList${products.length}件の80%=${expectedMin}件。アフィリンク抜け事故防止`);
+      // 7.1 🆕 概要欄アフィリンク密度チェック（2026-04-24追加・自ガル11事故受け）
+      if (products.length > 0 && desc) {
+        const affiliateCount = (desc.match(/tag=garuchannel22-22/g) || []).length;
+        const expectedMin = Math.floor(products.length * 0.8);
+        if (affiliateCount < expectedMin) {
+          fail(`概要欄アフィリンク件数不足`, `concat=${affiliateCount}件 < productList${products.length}件の80%=${expectedMin}件。アフィリンク抜け事故防止`);
+        }
+        pass(`概要欄アフィリンク ${affiliateCount}件 >= 閾値${expectedMin}件（productList80%）`);
       }
-      pass(`概要欄アフィリンク ${affiliateCount}件 >= 閾値${expectedMin}件（productList80%）`);
-    }
 
-    // 7.2 🆕 固定コメント Amazon+楽天ペア確認（2026-04-24追加）
-    if (pin) {
-      const amazonCount = (pin.match(/amazon\.co\.jp/g) || []).length;
-      const rakutenCount = (pin.match(/rakuten\.co\.jp/g) || []).length;
-      if (amazonCount < 10) {
-        fail('固定コメント Amazonリンク不足', `${amazonCount}件 < 最低10件・固定コメントは商品紹介の集約場所`);
+      // 7.2 🆕 固定コメント Amazon+楽天ペア確認（2026-04-24追加）
+      if (pin) {
+        const amazonCount = (pin.match(/amazon\.co\.jp/g) || []).length;
+        const rakutenCount = (pin.match(/rakuten\.co\.jp/g) || []).length;
+        if (amazonCount < 10) {
+          fail('固定コメント Amazonリンク不足', `${amazonCount}件 < 最低10件・固定コメントは商品紹介の集約場所`);
+        }
+        if (rakutenCount < amazonCount * 0.5) {
+          fail('固定コメント 楽天リンク不足', `楽天${rakutenCount}件 < Amazon${amazonCount}件の半分。両方並列で並べる運用`);
+        }
+        pass(`固定コメント Amazon${amazonCount}件+楽天${rakutenCount}件 ペア設置済`);
       }
-      if (rakutenCount < amazonCount * 0.5) {
-        fail('固定コメント 楽天リンク不足', `楽天${rakutenCount}件 < Amazon${amazonCount}件の半分。両方並列で並べる運用`);
-      }
-      pass(`固定コメント Amazon${amazonCount}件+楽天${rakutenCount}件 ペア設置済`);
     }
 
     // 7.3 🆕 ワーカーメッセージにプレースホルダー残存検出（2026-04-25 WARN化）

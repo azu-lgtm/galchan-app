@@ -48,6 +48,10 @@ function getOptArg(name) {
 const DESC_MD_PATH = getOptArg('desc-md');
 const PIN_MD_PATH  = getOptArg('pin-md');
 const WM_MD_PATH   = getOptArg('wm-md');
+// 🆕 2026-05-09: 100均テーマ等のアフィ非対応動画用例外フラグ
+//   pre_save_gate.mjs の --skip-affiliate-check と整合・概要欄アフィリンク密度チェックをスキップ
+//   自ガル11事故対策の他項目（商品リストD/E列必須/動画管理F-Q列必須/N列PLACEHOLDER残存）は維持
+const SKIP_AFFILIATE_CHECK = process.argv.includes('--skip-affiliate-check');
 
 const MANAGEMENT_SPREADSHEET_ID = process.env.SPREADSHEET_ID_GALCHAN;
 const SHEET_MANAGEMENT = '自分チャンネル・動画管理表';
@@ -213,12 +217,16 @@ if (rowIdx < 0) {
 
 // ── 3. 概要欄アフィリンク密度 ───────────────
 if (rowIdx >= 0) {
-  const desc = mgmtRows[rowIdx][10] || '';
-  const affCount = (desc.match(/tag=garuchannel22-22/g) || []).length;
-  if (affCount < Math.floor(prodCount * 0.5)) {
-    fail(`概要欄アフィリンク不足: ${affCount}件 < productList${prodCount}件の50%`);
+  if (SKIP_AFFILIATE_CHECK) {
+    console.log(`⏭️  概要欄アフィリンク密度チェックスキップ（--skip-affiliate-check・100均テーマ等のアフィ非対応動画用）`);
   } else {
-    pass(`概要欄アフィリンク ${affCount}件（productList${prodCount}件）`);
+    const desc = mgmtRows[rowIdx][10] || '';
+    const affCount = (desc.match(/tag=garuchannel22-22/g) || []).length;
+    if (affCount < Math.floor(prodCount * 0.5)) {
+      fail(`概要欄アフィリンク不足: ${affCount}件 < productList${prodCount}件の50%`);
+    } else {
+      pass(`概要欄アフィリンク ${affCount}件（productList${prodCount}件）`);
+    }
   }
 }
 
