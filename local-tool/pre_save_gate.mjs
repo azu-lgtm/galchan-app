@@ -233,6 +233,25 @@ async function main() {
     }
     pass('script ログセクション混入なし');
 
+    // 4.5 台本SE1/SE2交互配置チェック（2026-05-12追加・自ガル15でSE2連続14箇所違反発生・azu激怒）
+    // 台本ルール.md「8〜12発言ごとに1回 SE1/SE2を交互に配置」「SE1→SE2→SE1→SE2→… の順序を守る」厳守
+    const scriptLines = script.split(/\r?\n/);
+    const seSeq = [];
+    for (const ln of scriptLines) {
+      const m = ln.match(/\tSE([12])\s*$/);
+      if (m) seSeq.push({se: 'SE' + m[1], line: ln.substring(0, 50)});
+    }
+    if (seSeq.length >= 2) {
+      for (let i = 1; i < seSeq.length; i++) {
+        if (seSeq[i].se === seSeq[i-1].se) {
+          fail('台本SE1/SE2交互配置違反', `${i+1}番目で${seSeq[i].se}連続発生（前後: ${seSeq[i-1].line}... / ${seSeq[i].line}...）台本ルール.md「SE1→SE2→SE1→SE2の交互配置」必須`);
+        }
+      }
+      pass(`台本SE配置 ${seSeq.length}箇所 SE1/SE2交互OK`);
+    } else if (seSeq.length === 0 && scriptLines.length > 50) {
+      fail('台本SE記号ゼロ', '50行超の台本にSE記号なし・8〜12発言ごとSE1/SE2交互配置必須');
+    }
+
     // 5. 冒頭S015混入チェック（ガルのみ）
     if (channel === 'galchan') {
       const firstLines = script.split('\n').slice(0, 5).join('\n');
@@ -1047,6 +1066,10 @@ async function main() {
       'JIS', 'JAS', 'NITE', 'PMDA', // 公的機関・規格（カタカナ読み定着）
       'AI', 'IT', 'PC', 'USB', 'SD', 'HD', 'TV', 'PR', 'CM',
       'GW', // ゴールデンウィーク慣習化
+      // 2026-05-12追加（自ガル15 azu許容C案）: 日常一般化済の事実用語
+      'LED', 'IC', 'ED', 'PSC', 'HDMI',
+      // 2026-05-12追加（自ガル15 azuフィードバック）: 商品型番・認証規格は固有名詞扱い
+      'NI', 'NC', 'JET', 'KSF', 'PCH', 'MMP', 'SD', 'PJ', 'FB', 'GMS',
     ]);
 
     const tsvLinesA = script.split('\n').filter(l => l.includes('\t'));

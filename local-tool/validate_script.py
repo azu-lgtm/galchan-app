@@ -249,7 +249,9 @@ def validate(tsv_path: str) -> dict:
 
     # --- 結果 ---
     # 重大issueがあればfail
-    critical_rules = {"旧名使用（重大）", "連続同一話者（重大）", "1行目", "2行目", "行数不足（重大）"}
+    # 2026-05-12追加: 「SE交互」を CRITICAL に昇格（自ガル15でSE2連続違反14件発生・azu激怒）
+    # 2026-05-12追加: 「本文中ナレーション」も CRITICAL に昇格（本文中ナレ禁止ルール）
+    critical_rules = {"旧名使用（重大）", "連続同一話者（重大）", "1行目", "2行目", "行数不足（重大）", "SE交互", "本文中ナレーション", "ナレーションSE"}
     has_critical = any(i["rule"] in critical_rules for i in issues)
 
     return {
