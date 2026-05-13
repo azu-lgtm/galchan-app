@@ -253,6 +253,52 @@ if (sheetCfg) {
   console.warn(`\n⚠️ 動画スプシID未解決（動画管理表に未登録の可能性）。スプシ検査スキップ`);
 }
 
+// ============== 読み上げ風語尾連発検出（ガルchのみ・2026-05-13追加） ==============
+// azu指摘「セリフが何とか発表・何とかの話の連発で不自然」「同じのを頻繁に使うとか淡々と述べるチャンネルじゃない」
+// 詳細: ガルちゃんねる/DB/rules/語り口テンプレ.md
+if (ch === 'galchan' && sheetCfg) {
+  const NARRATION_KEYWORDS = {
+    '発表系': { keys: ['発表してた', '発表内容', '発表してる', '発表されてた', '公式の発表', '正式発表', 'メーカー発表'], threshold: 3 },
+    '報告系': { keys: ['報告されてる', '報告書', '事故報告', '報告もある', '件報告', 'って報告', 'も報告'], threshold: 3 },
+    '警告系': { keys: ['警告してた', '警告してる', '警告を強めてる', '警告を出してる'], threshold: 2 },
+    '公表系': { keys: ['公表してる', '公表されてる', '公表してた'], threshold: 2 },
+    '可能性系': { keys: ['可能性が高い', 'の可能性', '可能性って'], threshold: 2 },
+    '言われている系': { keys: ['と言われている', 'と紹介されている', 'と書かれている', 'と説明されている'], threshold: 1 },
+    'の話系（事実情報）': { keys: ['発表内容って', 'って数字って話', 'って件って話'], threshold: 1 },
+  };
+
+  const scriptRes2 = await sheets.spreadsheets.values.get({ spreadsheetId: sheetCfg.scriptSheetId, range: '台本!A4:C300' });
+  const scriptFlat = (scriptRes2.data.values || []).flat().join('\n');
+
+  console.log('\n=== 読み上げ風語尾連発検査（ガルch・語り口テンプレ.md準拠） ===');
+  let narrationViolations = 0;
+  Object.entries(NARRATION_KEYWORDS).forEach(([groupName, { keys, threshold }]) => {
+    let count = 0;
+    const hits = [];
+    keys.forEach(k => {
+      const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      const matches = scriptFlat.match(re);
+      if (matches) {
+        count += matches.length;
+        hits.push(`${k}×${matches.length}`);
+      }
+    });
+    if (count >= threshold) {
+      console.log(`⚠️ 「${groupName}」 ${count}回検出（上限${threshold}回）→ 読み上げ風NG・要リライト [${hits.join(', ')}]`);
+      narrationViolations++;
+    } else if (count > 0) {
+      console.log(`✅ 「${groupName}」 ${count}回（上限${threshold}回以内）`);
+    }
+  });
+
+  if (narrationViolations > 0) {
+    console.log(`\n⚠️ 読み上げ風語尾WARN: ${narrationViolations}グループ・語り口テンプレ.md参照して修正推奨`);
+    totalResidual += narrationViolations;
+  } else {
+    console.log('✅ 読み上げ風語尾連発なし');
+  }
+}
+
 // ============== 判定 ==============
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`📊 総残存数: ${totalResidual}件`);
