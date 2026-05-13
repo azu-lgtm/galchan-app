@@ -265,6 +265,7 @@ if (ch === 'galchan' && sheetCfg) {
     '可能性系': { keys: ['可能性が高い', 'の可能性', '可能性って'], threshold: 2 },
     '言われている系': { keys: ['と言われている', 'と紹介されている', 'と書かれている', 'と説明されている'], threshold: 1 },
     'の話系（事実情報）': { keys: ['発表内容って', 'って数字って話', 'って件って話'], threshold: 1 },
+    '出してきた系（不自然な日本語・azu指摘2026-05-13）': { keys: ['出してきた', '出してきて', '出してたんだって', 'って数字出して', '通達出してきた'], threshold: 2 },
   };
 
   const scriptRes2 = await sheets.spreadsheets.values.get({ spreadsheetId: sheetCfg.scriptSheetId, range: '台本!A4:C300' });
