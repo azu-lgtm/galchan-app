@@ -24,8 +24,8 @@ const sheets = google.sheets({ version: 'v4', auth });
 const scriptSheetId = '1Fdep87AOlSTT578tw2PTfkDYgJRTb8sMwyVyT1rkqrc';
 const mgmtSheetId = process.env.SPREADSHEET_ID_GALCHAN;
 
-// 新タイトル
-const newTitleCore = '【消費者庁・NITE警告】Amazonリコール危険商品20選＋家族守る神商品10選（ティファール418万台/ダイソー6.7万台）';
+// 新タイトル（J案・azu確定 2026-05-14）
+const newTitleCore = '【消費者庁・NITE警告】Amazonで売れてる危険商品20選＋神商品10選';
 const newTitleFull = newTitleCore + '【有益ガルちゃん】';
 
 console.log('===自ガル15タイトル変更反映===');
