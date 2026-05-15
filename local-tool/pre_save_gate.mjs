@@ -1637,6 +1637,39 @@ async function main() {
     pass('論理矛盾 なし');
   }
 
+  // ═══ 29. 🆕 概要欄冒頭タイトル禁止（2026-05-15確定・azu「過去言ったのにまた入れてる」激怒事故受け） ═══
+  // タイトルはYouTube動画タイトル枠で表示されるので、概要欄冒頭で重複させない
+  // 過去にazu指示が出ていたがmemory/DB/pre_save_gateに埋め込まれず再発（書くだけでは守れない原則違反）
+  if (channel === 'galchan') {
+    const description = materials.description || payload.description || '';
+    const title = (payload.title || materials.title || '').trim();
+    if (title && title.length >= 10 && description) {
+      const head = description.split('\n').slice(0, 3).join('\n');
+
+      // 1. タイトル全文の完全一致
+      if (head.includes(title)) {
+        fail(`概要欄冒頭にタイトル丸ごと混入: 「${title}」`,
+             'azu指示「概要欄にタイトル入れるな」再発禁止。タイトルはYouTube動画タイトル枠で表示されるので、概要欄L1〜L3にタイトル全文を入れない（自ガル15 L1事故再発防止）');
+      }
+
+      // 2. タイトル核心15字以上の連続一致（記号削除版・末尾【有益ガルちゃん】等の付加を許容しつつ核心一致を検出）
+      const stripSym = s => s.replace(/[【】「」『』\s　、。！？・]/g, '');
+      const titleCore = stripSym(title);
+      const headCore = stripSym(head);
+      if (titleCore.length >= 15) {
+        for (let i = 0; i <= titleCore.length - 15; i++) {
+          const snippet = titleCore.substring(i, i + 15);
+          if (headCore.includes(snippet)) {
+            fail(`概要欄冒頭にタイトル核心15字以上混入: 「${snippet}」`,
+                 'azu指示「概要欄にタイトル入れるな」再発禁止。タイトル文字列の連続15字以上を概要欄冒頭(L1〜L3)に入れない');
+            break;
+          }
+        }
+      }
+    }
+    pass('概要欄冒頭タイトル禁止 違反なし');
+  }
+
   console.log(`\n🟢 PASS: 全チェック通過`);
 }
 

@@ -153,3 +153,30 @@ if (logicViolations.length > 0) {
 } else {
   console.log('🟢 PASS');
 }
+
+// ─── ガード29: 概要欄冒頭タイトル禁止 ───
+const stripSym = s => s.replace(/[【】「」『』\s　、。！？・]/g, '');
+const head = description.split('\n').slice(0, 3).join('\n');
+let ch29Violation = null;
+if (head.includes(title)) {
+  ch29Violation = `タイトル全文一致: 「${title}」`;
+} else {
+  const titleCore = stripSym(title);
+  const headCore = stripSym(head);
+  if (titleCore.length >= 15) {
+    for (let i = 0; i <= titleCore.length - 15; i++) {
+      const snippet = titleCore.substring(i, i + 15);
+      if (headCore.includes(snippet)) {
+        ch29Violation = `タイトル核心15字一致: 「${snippet}」`;
+        break;
+      }
+    }
+  }
+}
+console.log('\n══ ガード29: 概要欄冒頭タイトル禁止 ══');
+if (ch29Violation) {
+  console.log(`❌ FAIL（期待通り）: ${ch29Violation}`);
+  console.log(`   概要欄L1: ${head.split('\n')[0].slice(0, 80)}`);
+} else {
+  console.log('🟢 PASS');
+}
