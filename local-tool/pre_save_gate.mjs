@@ -1464,6 +1464,179 @@ async function main() {
     }
   }
 
+  // ═══ 26. 🆕 テーマ/店舗整合チェック（2026-05-15確定・自ガル15ダイソー&楽天混入事故受け） ═══
+  // azu判断: 「Amazonサイト自体にある商品ならOK・ダイソーは存在しないからNG」
+  // FAIL対象: テーマ店舗で売ってないことが明白な独占系（100均/倉庫店/フリマ/大型EC他社の本文購入案内）
+  // WARN対象: 販売店舗例示として許容される系（家電量販店/雑貨/メーカー/ディスカウント）
+  if (channel === 'galchan' && script) {
+    // 大型EC（互いに排他・本文での他社購入案内NG）
+    const ECOMMERCE = {
+      Amazon: /(Amazon|アマゾン)/i,
+      楽天: /(楽天市場|楽天)/,
+      Yahoo: /(Yahoo!?\s*ショッピング|ヤフーショッピング)/i,
+    };
+    // 100均系（Amazon等に確実に存在しない・azu明示NG）
+    const HUNDREDYEN = {
+      ダイソー: /ダイソー/,
+      セリア: /セリア/,
+      キャンドゥ: /キャンドゥ/,
+      スリーコインズ: /(3COINS|3コインズ|スリーコインズ)/i,
+      百均: /(百均|100均|百円ショップ|100円ショップ)/,
+    };
+    // 倉庫店（独自販売）
+    const WAREHOUSE = { コストコ: /コストコ/ };
+    // フリマ（Amazon回で「フリマで買え」は意図と異なる）
+    const FLEAMARKET = { メルカリ: /メルカリ/ };
+    // 販売店舗例示として許容される系（azu本意「Amazonに実在する商品ならOK」）
+    const RETAIL_OK = {
+      ヨドバシ: /(ヨドバシカメラ|ヨドバシ)/,
+      ビックカメラ: /(ビックカメラ|ビック)/,
+      ヤマダ電機: /(ヤマダ電機|ヤマダ)/,
+      エディオン: /エディオン/,
+      無印良品: /無印良品|無印/,
+      ロフト: /(ロフト|LOFT)/,
+      ハンズ: /(東急ハンズ|ハンズ)/,
+      しまむら: /しまむら/,
+      ニトリ: /ニトリ/,
+      カインズ: /カインズ/,
+      ドンキ: /(ドン・キホーテ|ドンキホーテ|ドンキ)/,
+    };
+
+    const ALL_FAIL_STORES = { ...ECOMMERCE, ...HUNDREDYEN, ...WAREHOUSE, ...FLEAMARKET };
+
+    // テーマ店舗の特定: サムネ全文言+タイトルから抽出
+    const thumbs = payload.thumbnails || materials.thumbnails || {};
+    const themeText = [
+      payload.title || '', materials.title || '',
+      thumbs.upper || '', thumbs.lower || '',
+      thumbs.frame1 || '', thumbs.frame2 || '', thumbs.frame3 || '', thumbs.frame4 || '',
+      thumbs.leftFrame || '', thumbs.rightFrame || '',
+    ].join(' ');
+
+    const themeStores = [];
+    for (const [name, rx] of Object.entries(ALL_FAIL_STORES)) {
+      if (rx.test(themeText)) themeStores.push(name);
+    }
+
+    if (themeStores.length > 0) {
+      const bodyText = [
+        script,
+        materials.description || payload.description || '',
+        materials.pinComment || payload.pinComment || '',
+        JSON.stringify(payload.productList || materials.productList || []),
+      ].join('\n');
+
+      // FAIL判定: 自テーマ以外の独占系店舗（100均/倉庫店/フリマ + 大型EC他社）
+      const failViolations = [];
+      for (const [name, rx] of Object.entries(ALL_FAIL_STORES)) {
+        if (themeStores.includes(name)) continue;
+        const matches = bodyText.match(new RegExp(rx.source, rx.flags.includes('g') ? rx.flags : rx.flags + 'g'));
+        if (matches && matches.length > 0) {
+          // 楽天URL（rakuten.co.jp / a.r10.to）はアフィURLとして除外
+          if (name === '楽天' || name === 'Yahoo') {
+            const stripped = bodyText
+              .replace(/https?:\/\/[^\s]*rakuten\.co\.jp[^\s]*/g, '')
+              .replace(/https?:\/\/a\.r10\.to[^\s]*/g, '')
+              .replace(/https?:\/\/[^\s]*yahoo\.co\.jp[^\s]*/g, '');
+            const nonUrlMatches = stripped.match(rx);
+            if (!nonUrlMatches || nonUrlMatches.length === 0) continue;
+            failViolations.push(`${name}(本文/概要欄言及${nonUrlMatches.length}件・URL除く)`);
+          } else {
+            failViolations.push(`${name}(${matches.length}件)`);
+          }
+        }
+      }
+
+      // WARN判定: 販売店舗例示系
+      const warnNotes = [];
+      for (const [name, rx] of Object.entries(RETAIL_OK)) {
+        const matches = bodyText.match(new RegExp(rx.source, rx.flags.includes('g') ? rx.flags : rx.flags + 'g'));
+        if (matches && matches.length > 0) {
+          warnNotes.push(`${name}(${matches.length}件)`);
+        }
+      }
+
+      if (failViolations.length > 0) {
+        fail(`テーマ/店舗整合違反: テーマ=${themeStores.join('/')} に存在しない/排他の店舗混入: ${failViolations.join(', ')}`,
+             '自ガル15ダイソー&楽天混入事故再発。Amazonサイト自体に存在しない商品（100均/コストコ/フリマ等）や、大型EC他社での本文購入案内はNG（楽天/YahooのアフィURLは除外）');
+      }
+      if (warnNotes.length > 0) {
+        console.warn(`⚠️  WARN: 販売店舗例示の言及（azu許容: Amazonサイトに実在する商品なら可）: ${warnNotes.join(', ')} → 該当商品がテーマ店舗で買えるか念のため確認`);
+      }
+      pass(`テーマ/店舗整合 ✅（テーマ店舗=${themeStores.join('/')}・独占系他店舗混入なし）`);
+    } else {
+      pass('テーマ/店舗整合 スキップ（サムネ/タイトルに店舗名なし=汎用回）');
+    }
+  }
+
+  // ═══ 27. 🆕 自作自演型 視聴者の声 検出（2026-05-15追加・自ガル15応援メッセージ混入事故受け） ═══
+  // 「このチャンネル」+ ポジ評価語 = 自作自演的・5ch掲示板（ガールズちゃんねる）の体裁逸脱
+  // 商品への口コミはOK・チャンネル本体への応援はNG（ナレーション固定文は除外）
+  if (channel === 'galchan' && script) {
+    const POSITIVE_PHRASES = /嬉しい|助かる|ありがとう(?:ござい)?|見て(?:て)?(?:嬉しい|よかった|本当に)|あって(?:本当に)?よかった|有益|参考になる|勉強になる|定期的に(?:チェック|見て|来て)|習慣がついて|頼り(?:にして|になる)|お世話になっ|信頼できる|大好き|応援|励みになる|救われ/;
+    const CHANNEL_REFS = /(このチャンネル|ガールズちゃんねる|ガルちゃんねる|ガルch|当チャンネル|チャンネル登録してよかった)/;
+    const lines = script.split('\n');
+    const violations = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      // ナレーション固定文・運営側発言は除外（行頭が「ナレ」「ナレーション」「※ナレ」）
+      if (/^(?:※\s*)?ナレ(?:ーション)?\b/.test(line) || /^(?:※\s*)?ナレ\s*[:：\t]/.test(line)) continue;
+      // タブ区切り：話者がナレーション系なら除外
+      const tabFirst = line.split('\t')[0]?.trim();
+      if (tabFirst && /^ナレ(?:ーション)?$/.test(tabFirst)) continue;
+      // 「このチャンネル」+ ポジ評価語の組合せ
+      if (CHANNEL_REFS.test(line) && POSITIVE_PHRASES.test(line)) {
+        violations.push(`L${i + 1}: ${line.trim().slice(0, 70)}`);
+      }
+    }
+    if (violations.length > 0) {
+      fail(`自作自演型コメント検出 ${violations.length}件: スレ民台詞にチャンネル応援系混入（5ch体裁逸脱）`,
+           `${violations.join('\n')}\n→ 商品口コミ（「○○使ったら〜」「○○良かった」）はOKだが、チャンネル本体への「助かる/ありがとう/見て嬉しい」系は自作自演的でNG（自ガル15 L245/L249事故再発防止）`);
+    }
+    pass('自作自演型コメント なし');
+  }
+
+  // ═══ 28. 🆕 論理矛盾検出（2026-05-15確定・自ガル15「安いから疑わない=思考停止」事故受け） ═══
+  // 直感に反する論理（安い+疑わない/安心、高い+疑う/危険）を検出。azu指摘「論理破綻」再発防止
+  // 除外: 「○倍だけど結局安い」「家族の安心は値段で測れない」型の高額正当化は健全な論理
+  if (channel === 'galchan' && script) {
+    const LOGIC_PATTERNS = [
+      { rx: /(安(?:い|さ|価))[^\n。]{0,30}?(疑わ(?:ない|なく)|安心|信頼(?:できる|して)|大丈夫|油断|問題ない|心配(?:ない|なく))/, label: '「安い」+「疑わない/安心/信頼/大丈夫」近接' },
+      { rx: /(疑わ(?:ない|なく)|安心|信頼(?:できる|して)|大丈夫|油断|問題ない|心配(?:ない|なく))[^\n。]{0,30}?(安(?:い|さ|価)|低価格|格安)/, label: '「疑わない/安心」+「安い」近接' },
+      { rx: /(高(?:い|さ|価)|高価|高級)[^\n。]{0,30}?(疑(?:う|わ)|危険|不安|怪しい|信用できない|信頼できない)/, label: '「高い」+「疑う/危険/不安/怪しい」近接' },
+      { rx: /(疑(?:う|わ)|危険|不安|怪しい|信用できない|信頼できない)[^\n。]{0,30}?(高(?:い|さ|価)|高価|高級)/, label: '「疑う/危険/不安」+「高い」近接' },
+    ];
+    // 健全な論理（高額正当化・コスパ反転）は除外
+    const EXEMPTION_PATTERNS = [
+      /(\d+\s*倍|\d+\s*割|多少|少し)?\s*(高(?:く|い)|割高).{0,40}?(結局|実は|むしろ|逆に|でも|長期では)\s*(安|お得|得|コスパ)/,
+      /(結局|実は|むしろ|長期では|トータル)\s*(?:は|で)?\s*安/,
+      /(値段|お金|価格)で(?:は)?測れない/,
+      /家族の(安心|安全|健康)/,
+      /(安心|安全|命)は(値段|お金|価格)/,
+      /長い目で見れば/,
+    ];
+    const lines = script.split('\n');
+    const logicViolations = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      // 除外パターンチェック: 健全な論理ならスキップ
+      if (EXEMPTION_PATTERNS.some(rx => rx.test(line))) continue;
+      for (const { rx, label } of LOGIC_PATTERNS) {
+        if (rx.test(line)) {
+          logicViolations.push(`L${i + 1} [${label}]: ${line.trim().slice(0, 80)}`);
+          break;
+        }
+      }
+    }
+    if (logicViolations.length > 0) {
+      fail(`論理矛盾検出 ${logicViolations.length}件: 直感に反する論理（安い+疑わない/高い+疑う 等）`,
+           `${logicViolations.join('\n')}\n→ 「安い=疑わない」「高い=疑う」は論理破綻（普通は「高いから疑わない」「安いから疑う」）。論理を反転して書き直し（自ガル15 L127「安いから疑わない=思考停止」事故再発防止）`);
+    }
+    pass('論理矛盾 なし');
+  }
+
   console.log(`\n🟢 PASS: 全チェック通過`);
 }
 
