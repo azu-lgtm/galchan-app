@@ -566,15 +566,20 @@ async function main() {
   if (script) {
     const scriptLines = script.split('\n').filter(l => l.trim());
 
-    // 9.1 冒頭3行型（健康のみ）: 開始6行以内に共感表現
+    // 9.1 冒頭共感表現（健康のみ・2026-05-16 azu指示Aで「冒頭6行以内→冒頭16行以内」+ FAIL→WARN に緩和）
+    // 「ダイジェスト先出し型」（冒頭1-6行でやり方先見せ→見出し2で共感）パターンを公式に許容
+    // 外健63「コペンハーゲンプランク」で初採用・初運用テストで FAIL → azu判断A で WARN化
     if (channel === 'health') {
       const sympathyPatterns = [/気持ち[^。]*わかる/, /同じ[^。]*だった/, /同じ[^。]*悩/, /同じ[^。]*経験/, /同じ[^。]*来た/];
-      const firstSixLines = scriptLines.slice(0, 6).join('\n');
-      const hasSympathy = sympathyPatterns.some(p => p.test(firstSixLines));
+      // 拡大: 冒頭16行以内（ダイジェスト先出し型なら見出し2まで含む範囲）
+      const firstNLines = scriptLines.slice(0, 16).join('\n');
+      const hasSympathy = sympathyPatterns.some(p => p.test(firstNLines));
       if (!hasSympathy) {
-        fail('冒頭6行以内に共感表現なし', '台本ルールL205-208 冒頭3行型: 自分事化→共感（気持ちわかる/同じだった等）→自分語り必須');
+        // FAIL → WARN に緩和（azu指示A 2026-05-16）。共感ゼロは絶対NGだが冒頭16行以内ならOK
+        console.warn('⚠️  WARN: 冒頭16行以内に共感表現なし（ダイジェスト先出し型なら見出し2まで含めて検出。共感ゼロは推奨しない）');
+      } else {
+        pass('冒頭16行以内に共感表現あり（ダイジェスト先出し型許容・azu指示A 2026-05-16で範囲拡大+WARN化）');
       }
-      pass('冒頭6行以内に共感表現あり');
 
       // 9.2 60秒以内本題（健康のみ）: 冒頭から【見出し】までが500字以内
       const firstSectionIdx = script.indexOf('【');
