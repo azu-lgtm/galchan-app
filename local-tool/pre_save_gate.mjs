@@ -70,30 +70,76 @@ async function main() {
   const materials = payload.materials || payload;
   const script = payload.script;
 
-  // ═══ 🚨 0a. 整合性チェック宣言（2026-05-16 azu指示・既存「修正完了報告チェックリスト.md」徹底） ═══
+  // ═══ 🚨 0a. 整合性チェック ハイブリッド検証（2026-05-16 azu指示D・フラグ + 証拠ログ二重防御） ═══
   // azu指摘「店舗とか具体的じゃなく抽象化しろ・整合性/誤情報/語尾不自然/重複」を受けて新規ガード乱立をやめ、
   // 既存の「修正完了報告チェックリスト.md」を主軸として保存前に4観点+5項目を必ず実行する。
-  // 宣言方法: payload.integrity_check_declared=true または CLI フラグ --integrity-checked
-  const integrityChecked = payload.integrity_check_declared === true || process.argv.includes('--integrity-checked');
-  if (channel === 'galchan' && !integrityChecked) {
-    fail('整合性チェック未宣言（2026-05-16 azu指示で必須化）',
-`保存前に必ず以下を実行してから --integrity-checked フラグ付きで再実行する:
-  1. DB/rules/修正完了報告チェックリスト.md の5項目を完遂:
-     ① azu改善案コピペdiff検証
-     ② 全関連ファイル grep検証（Obsidian側全MD・基本情報表+本文両方）
-     ③ スプシ実体読み戻し検証
-     ④ 基本情報サマリ表 + 台本本文TSV 両方検証
-     ⑤ reply送信前の最終確認
-  2. 4観点チェック完了:
-     - テーマ整合: サムネ/タイトル/台本/商品リスト/概要欄/固定コメが同じ核心テーマで一貫
-       例「Amazonで買うな」回→Amazon商品のみ・他店舗購入ガイド混入NG
-     - 誤情報: 数値・固有名詞の正確性
-     - 語尾の不自然さ: 「〜の。」連発・同じ語尾3行連続等
-     - 重複: 同じ話・同じ商品・同じ表現の不要な繰り返し
-  3. node scripts/revision-reflection-gate.mjs --video=<id> exit 0
-  4. 完了したら次回実行時に --integrity-checked フラグ付与`);
+  // フラグだけだと自己申告で形骸化する → azu「D ハイブリッド」指示でフラグ+証拠ログの二重防御に変更
+  if (channel === 'galchan') {
+    const integrityFlag = process.argv.includes('--integrity-checked');
+    const integrityLog = payload.integrity_check;
+
+    // (A) フラグ
+    if (!integrityFlag) {
+      fail('整合性チェック フラグ未指定（--integrity-checked）',
+`保存前に修正完了報告チェックリスト5項目+4観点+revision-reflection-gateを実行し、
+payload.integrity_check に証拠ログを記録した上で --integrity-checked フラグ付きで再実行する。
+詳細: DB/rules/修正完了報告チェックリスト.md`);
+    }
+
+    // (B) 証拠ログ
+    if (!integrityLog || typeof integrityLog !== 'object') {
+      fail('整合性チェック 証拠ログ未提出（payload.integrity_check 必須）',
+`payload.integrity_check に以下の構造で証拠ログを含める:
+{
+  "timestamp": "ISO8601（直近30分以内）",
+  "checklist_5items": {
+    "diff_check": "passed", "grep_check": "passed", "spreadsheet_readback": "passed",
+    "basic_info_and_body": "passed", "final_confirmation": "passed"
+  },
+  "four_aspects": {
+    "theme_consistency": "passed", "misinformation": "passed",
+    "tail_naturalness": "passed", "duplication": "passed"
+  },
+  "revision_gate_exit_code": 0
+}`);
+    }
+
+    // (B1) timestamp 検証（直近30分以内）
+    const ts = new Date(integrityLog.timestamp);
+    const diffMin = (Date.now() - ts.getTime()) / 1000 / 60;
+    if (isNaN(ts.getTime())) {
+      fail('整合性チェック timestamp 不正', `payload.integrity_check.timestamp は ISO8601 形式（例: 2026-05-16T07:00:00Z）`);
+    }
+    if (diffMin > 30) {
+      fail('整合性チェック timestamp 古すぎ', `${Math.round(diffMin)}分前のログ。30分以内の証拠が必要（古いログ流用禁止）`);
+    }
+    if (diffMin < 0) {
+      fail('整合性チェック timestamp 未来時刻', `${Math.round(-diffMin)}分後のログ。未来時刻NG`);
+    }
+
+    // (B2) 9項目（5+4）検証
+    const required5 = ['diff_check', 'grep_check', 'spreadsheet_readback', 'basic_info_and_body', 'final_confirmation'];
+    const required4 = ['theme_consistency', 'misinformation', 'tail_naturalness', 'duplication'];
+    const failedItems = [];
+    const c5 = integrityLog.checklist_5items || {};
+    const c4 = integrityLog.four_aspects || {};
+    for (const k of required5) {
+      if (c5[k] !== 'passed') failedItems.push(`checklist_5items.${k}=${c5[k] ?? '未記載'}`);
+    }
+    for (const k of required4) {
+      if (c4[k] !== 'passed') failedItems.push(`four_aspects.${k}=${c4[k] ?? '未記載'}`);
+    }
+    if (failedItems.length > 0) {
+      fail('整合性チェック 未完了項目あり', `${failedItems.length}件: ${failedItems.join(', ')}\n全9項目（5項目+4観点）が "passed" でないと保存不可`);
+    }
+
+    // (B3) revision_gate_exit_code 検証
+    if (integrityLog.revision_gate_exit_code !== 0) {
+      fail('revision-reflection-gate.mjs 未通過', `exit_code=${integrityLog.revision_gate_exit_code ?? '未記載'} (0が必須・node scripts/revision-reflection-gate.mjs --video=<id> を実行して exit 0 を確認)`);
+    }
+
+    pass(`整合性チェック ハイブリッドPASS（フラグ✅ + 5項目✅ + 4観点✅ + revision-gate✅・${Math.round(diffMin)}分前のログ）`);
   }
-  if (integrityChecked) pass('整合性チェック宣言済み（4観点+チェックリスト5項目+revision-reflection-gate実行）');
 
   // 0. 強制テンプレファイルRead確認（ガル/健康両方）
   const { readFile: _rf } = await import('fs/promises');
