@@ -173,6 +173,22 @@ async function main() {
     pass(`整合性チェック E:外部ファイル証拠 PASS（フラグ✅ ファイル名規約✅ ハッシュ整合✅ timestamp${Math.round(diffMin)}分前 9項目✅ revision-gate✅）`);
   }
 
+  // ═══ 🚨 0b. 健康台本Doc冒頭タイトル禁止（2026-05-16 azu指示・健康ch本来は本文のみ） ═══
+  // azu指摘「台本にタイトル入れんなよ？冒頭」
+  // 健康ch のDocは本文のみ。タイトルはYouTube側に別途設定する。save スクリプトで docScriptHeader 付与禁止。
+  if (channel === 'health' && script) {
+    const scriptFirstLine = script.split('\n').find(l => l.trim())?.trim() || '';
+    const titles = payload.titles || materials.titles || [];
+    const thumbnailTexts = payload.thumbnailTexts || materials.thumbnailTexts || [];
+    const candidates = [...titles, ...thumbnailTexts].filter(t => typeof t === 'string' && t.trim());
+    const titleHit = candidates.find(t => scriptFirstLine === t.trim());
+    if (titleHit) {
+      fail('健康台本Doc冒頭タイトル混入',
+        `script先頭行「${scriptFirstLine.slice(0, 40)}…」が titles/thumbnailTexts と完全一致。\nazu指示2026-05-16: 健康chのDocはタイトル冒頭付与禁止（本文のみ）。save_外健NN.mjs から docScriptHeader 削除必須`);
+    }
+    pass('健康台本Doc冒頭タイトル禁止 違反なし');
+  }
+
   // 0. 強制テンプレファイルRead確認（ガル/健康両方）
   const { readFile: _rf } = await import('fs/promises');
   const templateFiles = channel === 'galchan' ? [
