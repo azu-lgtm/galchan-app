@@ -70,6 +70,31 @@ async function main() {
   const materials = payload.materials || payload;
   const script = payload.script;
 
+  // ═══ 🚨 0a. 整合性チェック宣言（2026-05-16 azu指示・既存「修正完了報告チェックリスト.md」徹底） ═══
+  // azu指摘「店舗とか具体的じゃなく抽象化しろ・整合性/誤情報/語尾不自然/重複」を受けて新規ガード乱立をやめ、
+  // 既存の「修正完了報告チェックリスト.md」を主軸として保存前に4観点+5項目を必ず実行する。
+  // 宣言方法: payload.integrity_check_declared=true または CLI フラグ --integrity-checked
+  const integrityChecked = payload.integrity_check_declared === true || process.argv.includes('--integrity-checked');
+  if (channel === 'galchan' && !integrityChecked) {
+    fail('整合性チェック未宣言（2026-05-16 azu指示で必須化）',
+`保存前に必ず以下を実行してから --integrity-checked フラグ付きで再実行する:
+  1. DB/rules/修正完了報告チェックリスト.md の5項目を完遂:
+     ① azu改善案コピペdiff検証
+     ② 全関連ファイル grep検証（Obsidian側全MD・基本情報表+本文両方）
+     ③ スプシ実体読み戻し検証
+     ④ 基本情報サマリ表 + 台本本文TSV 両方検証
+     ⑤ reply送信前の最終確認
+  2. 4観点チェック完了:
+     - テーマ整合: サムネ/タイトル/台本/商品リスト/概要欄/固定コメが同じ核心テーマで一貫
+       例「Amazonで買うな」回→Amazon商品のみ・他店舗購入ガイド混入NG
+     - 誤情報: 数値・固有名詞の正確性
+     - 語尾の不自然さ: 「〜の。」連発・同じ語尾3行連続等
+     - 重複: 同じ話・同じ商品・同じ表現の不要な繰り返し
+  3. node scripts/revision-reflection-gate.mjs --video=<id> exit 0
+  4. 完了したら次回実行時に --integrity-checked フラグ付与`);
+  }
+  if (integrityChecked) pass('整合性チェック宣言済み（4観点+チェックリスト5項目+revision-reflection-gate実行）');
+
   // 0. 強制テンプレファイルRead確認（ガル/健康両方）
   const { readFile: _rf } = await import('fs/promises');
   const templateFiles = channel === 'galchan' ? [
