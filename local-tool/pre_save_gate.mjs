@@ -70,11 +70,12 @@ async function main() {
   const materials = payload.materials || payload;
   const script = payload.script;
 
-  // ═══ 🚨 0a. 整合性チェック E: 外部ファイル証拠検証（2026-05-16 azu指示E・偽造防止強化） ═══
+  // ═══ 🚨 0a. 整合性チェック E: 外部ファイル証拠検証（2026-05-16 azu指示E・偽造防止強化・両ch対応） ═══
   // azu指摘「フラグ+payload直接書きは自己申告で嘘書ける」を受けて外部スクリプト生成ログのみ許容に変更。
   // 既存「修正完了報告チェックリスト.md」を主軸として、record-integrity-check.mjs 経由でログ生成→pre_save_gate参照。
   // ファイル名・中身ハッシュ・タイムスタンプの3層検証で偽造を最大限抑止。
-  if (channel === 'galchan') {
+  // 2026-05-16 健康chへ横展開（azu指示）: galchan/health 両ch対応
+  if (channel === 'galchan' || channel === 'health') {
     // (A) フラグ
     const integrityFlag = process.argv.includes('--integrity-checked');
     if (!integrityFlag) {
