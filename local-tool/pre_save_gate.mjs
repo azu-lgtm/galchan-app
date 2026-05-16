@@ -70,45 +70,78 @@ async function main() {
   const materials = payload.materials || payload;
   const script = payload.script;
 
-  // ═══ 🚨 0a. 整合性チェック ハイブリッド検証（2026-05-16 azu指示D・フラグ + 証拠ログ二重防御） ═══
-  // azu指摘「店舗とか具体的じゃなく抽象化しろ・整合性/誤情報/語尾不自然/重複」を受けて新規ガード乱立をやめ、
-  // 既存の「修正完了報告チェックリスト.md」を主軸として保存前に4観点+5項目を必ず実行する。
-  // フラグだけだと自己申告で形骸化する → azu「D ハイブリッド」指示でフラグ+証拠ログの二重防御に変更
+  // ═══ 🚨 0a. 整合性チェック E: 外部ファイル証拠検証（2026-05-16 azu指示E・偽造防止強化） ═══
+  // azu指摘「フラグ+payload直接書きは自己申告で嘘書ける」を受けて外部スクリプト生成ログのみ許容に変更。
+  // 既存「修正完了報告チェックリスト.md」を主軸として、record-integrity-check.mjs 経由でログ生成→pre_save_gate参照。
+  // ファイル名・中身ハッシュ・タイムスタンプの3層検証で偽造を最大限抑止。
   if (channel === 'galchan') {
-    const integrityFlag = process.argv.includes('--integrity-checked');
-    const integrityLog = payload.integrity_check;
-
     // (A) フラグ
+    const integrityFlag = process.argv.includes('--integrity-checked');
     if (!integrityFlag) {
       fail('整合性チェック フラグ未指定（--integrity-checked）',
-`保存前に修正完了報告チェックリスト5項目+4観点+revision-reflection-gateを実行し、
-payload.integrity_check に証拠ログを記録した上で --integrity-checked フラグ付きで再実行する。
-詳細: DB/rules/修正完了報告チェックリスト.md`);
+`保存前に以下を実行する:
+  1. DB/rules/修正完了報告チェックリスト.md の5項目+4観点を完遂
+  2. node scripts/revision-reflection-gate.mjs --video=<id> 実行して exit 0 確認
+  3. node local-tool/record-integrity-check.mjs --video=<id> --diff_check=passed --grep_check=passed ... で証拠ログ生成
+  4. payload.integrity_check_log_path に生成されたファイルパスを設定
+  5. --integrity-checked フラグ付きで pre_save_gate 再実行`);
     }
 
-    // (B) 証拠ログ
-    if (!integrityLog || typeof integrityLog !== 'object') {
-      fail('整合性チェック 証拠ログ未提出（payload.integrity_check 必須）',
-`payload.integrity_check に以下の構造で証拠ログを含める:
-{
-  "timestamp": "ISO8601（直近30分以内）",
-  "checklist_5items": {
-    "diff_check": "passed", "grep_check": "passed", "spreadsheet_readback": "passed",
-    "basic_info_and_body": "passed", "final_confirmation": "passed"
-  },
-  "four_aspects": {
-    "theme_consistency": "passed", "misinformation": "passed",
-    "tail_naturalness": "passed", "duplication": "passed"
-  },
-  "revision_gate_exit_code": 0
-}`);
+    // (B) ログファイルパス必須
+    const logPath = payload.integrity_check_log_path;
+    if (!logPath || typeof logPath !== 'string') {
+      fail('整合性チェック ログファイルパス未提出（payload.integrity_check_log_path 必須）',
+        'record-integrity-check.mjs で証拠ログを生成し、出力ファイルパスを payload.integrity_check_log_path に設定して再実行');
     }
 
-    // (B1) timestamp 検証（直近30分以内）
-    const ts = new Date(integrityLog.timestamp);
+    // (C) ログファイル実体読み込み
+    const { readFile: _rfLog } = await import('fs/promises');
+    const { createHash: _ch } = await import('crypto');
+    const path = await import('path');
+    let logFullPath = logPath;
+    if (!path.isAbsolute(logPath)) {
+      const url = await import('url');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      logFullPath = path.resolve(here, logPath);
+    }
+
+    let logData;
+    try {
+      const logRaw = await _rfLog(logFullPath, 'utf8');
+      logData = JSON.parse(logRaw);
+    } catch (e) {
+      fail('整合性チェック ログファイル読込失敗',
+        `path=${logFullPath} / 原因: ${e.message}\nrecord-integrity-check.mjs で正しく生成されたパスか確認`);
+    }
+
+    // (D) ファイル名規約検証: <video_id>_<unix_timestamp>_<hash>.json
+    const filename = path.basename(logFullPath);
+    const nameMatch = filename.match(/^([\w-]+)_(\d+)_([a-f0-9]{12})\.json$/);
+    if (!nameMatch) {
+      fail('整合性チェック ログファイル名規約違反',
+        `ファイル名「${filename}」が <video_id>_<unix>_<hash>.json 形式じゃない。record-integrity-check.mjs 経由で生成必須`);
+    }
+    const [, videoIdInName, unixInName, hashInName] = nameMatch;
+
+    // (E) 中身のtimestamp/unix_timestamp/content_hash 一致検証
+    if (logData.unix_timestamp !== Number(unixInName)) {
+      fail('整合性チェック 改ざん検出（ファイル名と中身のunix_timestamp不一致）',
+        `ファイル名unix=${unixInName} ≠ 中身unix=${logData.unix_timestamp}`);
+    }
+    // content_hash 検証: log から content_hash を除いた残りで再計算→一致確認
+    const logWithoutHash = { ...logData };
+    delete logWithoutHash.content_hash;
+    const recomputedHash = _ch('sha256').update(JSON.stringify(logWithoutHash)).digest('hex').slice(0, 12);
+    if (recomputedHash !== logData.content_hash || recomputedHash !== hashInName) {
+      fail('整合性チェック 改ざん検出（content_hash不一致）',
+        `ファイル名hash=${hashInName} / 中身hash=${logData.content_hash} / 再計算=${recomputedHash}\n手書きで改ざんすると検出される`);
+    }
+
+    // (F) timestamp 直近30分以内
+    const ts = new Date(logData.timestamp);
     const diffMin = (Date.now() - ts.getTime()) / 1000 / 60;
     if (isNaN(ts.getTime())) {
-      fail('整合性チェック timestamp 不正', `payload.integrity_check.timestamp は ISO8601 形式（例: 2026-05-16T07:00:00Z）`);
+      fail('整合性チェック timestamp 不正', `logData.timestamp は ISO8601 形式必須`);
     }
     if (diffMin > 30) {
       fail('整合性チェック timestamp 古すぎ', `${Math.round(diffMin)}分前のログ。30分以内の証拠が必要（古いログ流用禁止）`);
@@ -117,12 +150,12 @@ payload.integrity_check に証拠ログを記録した上で --integrity-checked
       fail('整合性チェック timestamp 未来時刻', `${Math.round(-diffMin)}分後のログ。未来時刻NG`);
     }
 
-    // (B2) 9項目（5+4）検証
+    // (G) 9項目（5+4）+ revision_gate_exit_code 検証
     const required5 = ['diff_check', 'grep_check', 'spreadsheet_readback', 'basic_info_and_body', 'final_confirmation'];
     const required4 = ['theme_consistency', 'misinformation', 'tail_naturalness', 'duplication'];
     const failedItems = [];
-    const c5 = integrityLog.checklist_5items || {};
-    const c4 = integrityLog.four_aspects || {};
+    const c5 = logData.checklist_5items || {};
+    const c4 = logData.four_aspects || {};
     for (const k of required5) {
       if (c5[k] !== 'passed') failedItems.push(`checklist_5items.${k}=${c5[k] ?? '未記載'}`);
     }
@@ -132,13 +165,11 @@ payload.integrity_check に証拠ログを記録した上で --integrity-checked
     if (failedItems.length > 0) {
       fail('整合性チェック 未完了項目あり', `${failedItems.length}件: ${failedItems.join(', ')}\n全9項目（5項目+4観点）が "passed" でないと保存不可`);
     }
-
-    // (B3) revision_gate_exit_code 検証
-    if (integrityLog.revision_gate_exit_code !== 0) {
-      fail('revision-reflection-gate.mjs 未通過', `exit_code=${integrityLog.revision_gate_exit_code ?? '未記載'} (0が必須・node scripts/revision-reflection-gate.mjs --video=<id> を実行して exit 0 を確認)`);
+    if (logData.revision_gate_exit_code !== 0) {
+      fail('revision-reflection-gate.mjs 未通過', `exit_code=${logData.revision_gate_exit_code ?? '未記載'} (0が必須)`);
     }
 
-    pass(`整合性チェック ハイブリッドPASS（フラグ✅ + 5項目✅ + 4観点✅ + revision-gate✅・${Math.round(diffMin)}分前のログ）`);
+    pass(`整合性チェック E:外部ファイル証拠 PASS（フラグ✅ ファイル名規約✅ ハッシュ整合✅ timestamp${Math.round(diffMin)}分前 9項目✅ revision-gate✅）`);
   }
 
   // 0. 強制テンプレファイルRead確認（ガル/健康両方）

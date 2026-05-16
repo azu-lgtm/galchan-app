@@ -57,3 +57,5 @@ data/
 *.bak
 .letta/
 temp_*
+
+.integrity-log/
