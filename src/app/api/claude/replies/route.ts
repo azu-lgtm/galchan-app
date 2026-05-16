@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       + settingsBlock
       + instructionBlock
 
-    const responseText = await callGemini(prompt, 4000)
+    const responseText = await callGemini(prompt, 16000, { jsonMode: true })
 
     // JSON抽出（```json ブロック対応）
     const jsonMatch = responseText.match(/```json\n?([\s\S]*?)\n?```/)

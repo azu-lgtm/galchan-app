@@ -7,6 +7,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
 
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 
+function supportsThinking(model: string): boolean {
+  return model.startsWith('gemini-2.5')
+}
+
 /**
  * ストリーミング呼び出し — ReadableStream<Uint8Array> を返す
  */
@@ -27,6 +31,7 @@ export function streamGemini(
             maxOutputTokens: Math.min(maxTokens, 65536),
             ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
           },
+          ...(options?.jsonMode && supportsThinking(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         })
         const result = await geminiModel.generateContentStream(prompt)
         for await (const chunk of result.stream) {
@@ -60,6 +65,7 @@ export async function callGemini(
           maxOutputTokens: Math.min(maxTokens, 65536),
           ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
         },
+        ...(options?.jsonMode && supportsThinking(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       })
       const result = await geminiModel.generateContent(prompt)
       return result.response.text()
