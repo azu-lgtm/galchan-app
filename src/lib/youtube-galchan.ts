@@ -235,22 +235,34 @@ export async function getOwnerChannelVideos(
  * scope: youtube.force-ssl 必要
  */
 export async function getVideoCommentsOwner(videoId: string, accessToken: string) {
-  const url = new URL(`${BASE_URL}/commentThreads`)
-  url.searchParams.set('part', 'snippet,replies')
-  url.searchParams.set('videoId', videoId)
-  url.searchParams.set('maxResults', '100')
-  url.searchParams.set('order', 'time')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allItems: any[] = []
+  let pageToken: string | undefined
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const errBody = await res.text()
-    throw new Error(`YouTube comments API error: ${res.status} ${errBody}`)
+  for (let page = 0; page < 10; page++) {
+    const url = new URL(`${BASE_URL}/commentThreads`)
+    url.searchParams.set('part', 'snippet,replies')
+    url.searchParams.set('videoId', videoId)
+    url.searchParams.set('maxResults', '100')
+    url.searchParams.set('order', 'time')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      const errBody = await res.text()
+      throw new Error(`YouTube comments API error: ${res.status} ${errBody}`)
+    }
+    const data = await res.json()
+    if (data.items) allItems.push(...data.items)
+
+    if (!data.nextPageToken) break
+    pageToken = data.nextPageToken
   }
-  const data = await res.json()
-  return data.items ?? []
+
+  return allItems
 }
 
 /**
