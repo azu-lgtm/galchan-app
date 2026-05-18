@@ -460,17 +460,24 @@ async function main() {
         pass(`概要欄アフィリンク ${affiliateCount}件 >= 閾値${expectedMin}件（productList80%）`);
       }
 
-      // 7.2 🆕 固定コメント Amazon+楽天ペア確認（2026-04-24追加）
+      // 7.2 🆕 固定コメント Amazon+楽天ペア確認（2026-04-24追加・2026-05-18 azu v12指示で緩和）
+      // azu指示「セットなんだから連動」: 神商品リンクは概要欄に集約 OR 固定コメに集約 のどちらかでOK
+      // 自ガル16 v12: 概要欄に12件集約・固定コメは質問+チェックステップで再構成（神商品リンク不要）
       if (pin) {
-        const amazonCount = (pin.match(/amazon\.co\.jp/g) || []).length;
-        const rakutenCount = (pin.match(/rakuten\.co\.jp/g) || []).length;
-        if (amazonCount < 10) {
-          fail('固定コメント Amazonリンク不足', `${amazonCount}件 < 最低10件・固定コメントは商品紹介の集約場所`);
+        const pinAmazonCount = (pin.match(/amazon\.co\.jp/g) || []).length;
+        const pinRakutenCount = (pin.match(/rakuten\.co\.jp/g) || []).length;
+        const descAmazonCount = desc ? (desc.match(/amazon\.co\.jp/g) || []).length : 0;
+        const descRakutenCount = desc ? (desc.match(/rakuten\.co\.jp/g) || []).length : 0;
+        // 概要欄+固定コメ合算で10件以上あればOK（azu v12「セット連動」運用）
+        const totalAmazon = pinAmazonCount + descAmazonCount;
+        const totalRakuten = pinRakutenCount + descRakutenCount;
+        if (totalAmazon < 10) {
+          fail('神商品Amazonリンク不足', `概要欄${descAmazonCount}件+固定コメ${pinAmazonCount}件=合計${totalAmazon}件 < 最低10件・azu v12「セット連動」運用`);
         }
-        if (rakutenCount < amazonCount * 0.5) {
-          fail('固定コメント 楽天リンク不足', `楽天${rakutenCount}件 < Amazon${amazonCount}件の半分。両方並列で並べる運用`);
+        if (totalRakuten < totalAmazon * 0.5) {
+          fail('神商品楽天リンク不足', `合計楽天${totalRakuten}件 < Amazon${totalAmazon}件の半分。両方並列で並べる運用`);
         }
-        pass(`固定コメント Amazon${amazonCount}件+楽天${rakutenCount}件 ペア設置済`);
+        pass(`神商品リンク 概要欄${descAmazonCount}件+固定コメ${pinAmazonCount}件=合計Amazon${totalAmazon}件+楽天${totalRakuten}件 ペア設置済`);
       }
     }
 
@@ -2179,17 +2186,23 @@ async function main() {
     }
 
     // ─── ガード38: エンディング登録誘導文言重複検出 ───
+    // 2026-05-18 azu指示で同一CTA文言の重複のみ検出に変更
+    // 「チャンネル登録 + 高評価」セットは自ガル15正版型で許容
+    // 同じ文言（例: チャンネル登録が2回）が出るとFAIL
     {
-      // 後半1/3を抽出
       const endingStart = Math.floor(scriptLines.length * 2 / 3);
       const endingPart = scriptLines.slice(endingStart).join('\n');
-      const ctaPattern = /(チャンネル登録|高評価|コメントよろしく|コメントしてね|次回もお楽しみ|また見に来て|また来てね|お見逃しなく|フォローよろしく)/g;
-      const ctaMatches = endingPart.match(ctaPattern) || [];
-      if (ctaMatches.length >= 2) {
-        fail('ガード38: エンディング登録誘導重複検出',
-          `エンディング部分でCTA文言${ctaMatches.length}個検出: ${[...new Set(ctaMatches)].join(' / ')}\n→ 1個に統合・「気に入ってくれたらチャンネル登録して、次回も一緒に楽しもう」型\n  詳細: memory/feedback_ending_cta_one_only.md`);
+      const ctaPatterns = ['チャンネル登録', '高評価', 'コメントよろしく', 'コメントしてね', '次回もお楽しみ', 'また見に来て', 'また来てね', 'お見逃しなく', 'フォローよろしく'];
+      const dupCtas = [];
+      for (const cta of ctaPatterns) {
+        const count = (endingPart.match(new RegExp(cta, 'g')) || []).length;
+        if (count >= 2) dupCtas.push(`${cta}(${count}回)`);
       }
-      pass('ガード38: エンディング登録誘導1個以下');
+      if (dupCtas.length > 0) {
+        fail('ガード38: エンディング同一CTA文言重複検出',
+          `同一CTA文言が2回以上検出: ${dupCtas.join(' / ')}\n→ 同じCTAの繰返しは離脱誘発・1回のみに統合\n  詳細: memory/feedback_ending_cta_one_only.md`);
+      }
+      pass('ガード38: エンディング同一CTA重複なし');
     }
 
     // ─── ガード39: 冒頭ナレ（L1）と本文1セクション目の類似度高すぎ検出 ───

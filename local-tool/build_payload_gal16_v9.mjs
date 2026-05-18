@@ -41,7 +41,7 @@ const payload = {
     workerMessage: worker,
     productList: []
   },
-  integrity_check_log_path: '.integrity-log/gal16_1779085849_2f6abbf82a06.json'
+  integrity_check_log_path: '.integrity-log/gal16_1779146808_cdcb58731d68.json'
 };
 
 const outPath = String.raw`C:\Users\meiek\Desktop\ClaudeCode-projects\galchan-app\local-tool\save_payload_gal16_v9.json`;
