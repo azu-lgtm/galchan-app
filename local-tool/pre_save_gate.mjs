@@ -1824,9 +1824,17 @@ async function main() {
 
     // 直近10本を抽出（行ベース末尾10本）+ "下記X本まとめ"の保存版動画も含める
     // テスト行（【テスト】）は除外
+    // 自分自身（payload.video_id由来）も除外（再保存時の自己被り防止・2026-05-18追加）
+    const selfVideoId = payload.video_id || '';
+    const selfScriptNameMatch = selfVideoId
+      ? new RegExp(`【自${selfVideoId.replace(/^gal/i, 'ガル')}台本】|【自ガル${(selfVideoId.match(/\d+/) || [''])[0]}台本】`)
+      : null;
     const filteredRows = rows.filter(cols => {
       const allText = cols.join(' ');
-      return !allText.includes('【テスト】') && !cols[1].includes('テスト台本');
+      if (allText.includes('【テスト】') || cols[1].includes('テスト台本')) return false;
+      // 自分自身の行を除外（再保存時の自己被り防止）
+      if (selfScriptNameMatch && selfScriptNameMatch.test(cols[1] || '')) return false;
+      return true;
     });
     const recentVideos = filteredRows.slice(-10).map(cols => ({
       title: cols[3] || '',
@@ -1977,6 +1985,251 @@ async function main() {
           `  発端: 自ガル16構成案で4/22保存版動画(自ガル4+5+6+9まとめ)と同じ素材→azu却下`);
       }
       pass(`過去動画被り検出 違反なし（直近${recentVideos.length}本と照合）`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🚨 ガード31〜39: 自ガル16セッション29項目違反恒久化（2026-05-18 azu指示）
+  // 発端: 自ガル16 v1〜v11 11回修正で発覚した29項目違反パターン
+  // 主な違反: 広告風メリット羅列・体言止め・産地批判・数字3個羅列・タイトルコール「40代」
+  //          ・「神」単独・イッチCTA・エンディング登録誘導重複・冒頭ナレ本文被り
+  // ═══════════════════════════════════════════════════════════════
+  if (channel === 'galchan' && script && typeof script === 'string') {
+    const scriptLines = script.split('\n');
+    const scriptLower = script;
+
+    // ─── ガード31: 広告風メリット羅列禁止（スレ民セリフ） ───
+    // 1行内に「○○で、○○で、○○で」3連続列挙パターン検出
+    {
+      const merit31Pattern = /([^、。\n]{2,15}[でしてくも](?:、|。)){3,}/;
+      const fails31 = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i];
+        // ナレ役行はスキップ（"C:" や "ナレ:" 等で始まる場合）
+        if (/^(C|ナレ|N|narrator)\s*[:：]/i.test(line)) continue;
+        // 連用形（〜で）が3個以上＋ポジ語が共起する場合のみFAIL
+        const continuativeCount = (line.match(/[^、。]{2,12}で(?=、)/g) || []).length;
+        const positiveWords = /(安心|安全|お手頃|便利|おすすめ|嬉しい|最高|コスパ|美味しい|簡単|楽|早い|お得)/;
+        if (continuativeCount >= 3 && positiveWords.test(line)) {
+          fails31.push(`L${i+1}: ${line.slice(0, 60)}...`);
+        }
+      }
+      if (fails31.length > 0) {
+        fail('ガード31: 広告風メリット羅列検出（スレ民セリフ）',
+          `${fails31.slice(0, 3).join('\n')}\n→ スレ民は実体験会話・1メリットに絞る or 体験告白型に置換\n  詳細: memory/feedback_no_ad_style_merit_enumeration.md`);
+      }
+      pass('ガード31: 広告風メリット羅列なし');
+    }
+
+    // ─── ガード32: 体言止め禁止（スレ民セリフ） ───
+    // 行末が「方/習慣/コツ/近道/秘訣/ポイント/特徴/理由/目安/基準/タイプ/型」で終わる
+    {
+      const taigenEndWords = ['方', '習慣', 'コツ', '近道', '秘訣', 'ポイント', '特徴', '理由', '目安', '基準', 'タイプ', '型'];
+      const fails32 = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i].trim();
+        if (!line) continue;
+        // ナレ役行はスキップ
+        if (/^(C|ナレ|N|narrator)\s*[:：]/i.test(line)) continue;
+        // 行末文字（。！？除く）
+        const cleaned = line.replace(/[。！？\s]+$/g, '');
+        for (const w of taigenEndWords) {
+          if (cleaned.endsWith(w)) {
+            // 「○○方法」「○○方角」等は除外
+            if (w === '方' && /(方法|方角|方面|地方|処方|前方|後方)$/.test(cleaned)) continue;
+            fails32.push(`L${i+1}: ${line.slice(0, 60)}... (末尾: ${w})`);
+            break;
+          }
+        }
+      }
+      if (fails32.length > 0) {
+        fail('ガード32: 体言止め検出（スレ民セリフ）',
+          `${fails32.slice(0, 5).join('\n')}\n→ 体言止めはスレ民セリフNG・「〜なんだよね」「〜と思う」等の終助詞or動詞型に\n  詳細: memory/feedback_no_taigen_dome_in_speech.md`);
+      }
+      pass('ガード32: 体言止めなし');
+    }
+
+    // ─── ガード33: 中国・産地批判検出 ───
+    // 産地語+ネガ語の同一行共起
+    {
+      const originPattern = /(中国産|韓国産|中国製|韓国製|タイ産|ベトナム産)/;
+      const negPattern = /(危ない|危険|怖い|問題|混ざって|信用できない|避ける|やばい|ヤバい|気持ち悪い|不安)/;
+      const fails33 = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i];
+        if (originPattern.test(line) && negPattern.test(line)) {
+          // 公的機関措置命令の引用文は除外
+          if (/(消費者庁|国民生活センター|NITE|農林水産省|厚生労働省|経済産業省).{0,30}(リコール|措置命令|警告|注意喚起)/.test(line)) continue;
+          fails33.push(`L${i+1}: ${line.slice(0, 80)}...`);
+        }
+      }
+      if (fails33.length > 0) {
+        fail('ガード33: 産地批判検出',
+          `${fails33.slice(0, 3).join('\n')}\n→ 産地批判は差別ニュアンス・炎上リスク。公的機関措置命令の事実引用に置換\n  詳細: memory/feedback_no_china_origin_criticism.md`);
+      }
+      pass('ガード33: 産地批判なし');
+    }
+
+    // ─── ガード34: スレ民1セリフ内数字3個以上検出 ───
+    {
+      const numPattern = /([0-9一二三四五六七八九十百千万億]+(?:[,.][0-9]+)?(?:円|個|割|倍|％|%|年|月|日|kg|g|cm|m|L|ml|分|秒|時間)?)/g;
+      const fails34 = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i];
+        // ナレ役・元店員役はスキップ（数字3個以上OK）
+        if (/^(C|ナレ|N|narrator|店員|元店員)\s*[:：]/i.test(line)) continue;
+        // セリフ部分のみ抽出（「役名:」以降）
+        const speechMatch = line.match(/^[^:：]+[:：]\s*(.+)$/);
+        const speech = speechMatch ? speechMatch[1] : line;
+        const numMatches = (speech.match(numPattern) || []);
+        // 数字のみのトークン（半角数字単独）を除外して内容数値のみカウント
+        const meaningfulNums = numMatches.filter(n => /[円個割倍％%年月日kgcmmL分秒時間]/.test(n) || n.length >= 3);
+        if (meaningfulNums.length >= 3) {
+          fails34.push(`L${i+1}: ${line.slice(0, 80)}... (数字${meaningfulNums.length}個)`);
+        }
+      }
+      if (fails34.length > 0) {
+        fail('ガード34: 数字3個以上羅列検出（スレ民セリフ）',
+          `${fails34.slice(0, 3).join('\n')}\n→ 会話で数字3つ並列は不自然・1〜2個に絞る or ナレ役に移譲\n  詳細: memory/feedback_no_3num_enumeration_in_speech.md`);
+      }
+      pass('ガード34: 数字3個羅列なし');
+    }
+
+    // ─── ガード35: タイトルコール（L2）に「40代」「40代以降」検出 ───
+    {
+      const titleCallText = payload.titleCall || (scriptLines[1] || '') + (scriptLines[2] || '');
+      if (/40代以降|40代/.test(titleCallText)) {
+        fail('ガード35: タイトルコールに「40代」「40代以降」検出',
+          `タイトルコール文: ${titleCallText.slice(0, 100)}\n→ YouTube動画タイトル本体は「40代以降」OKだがタイトルコール（ナレ）・サムネ・概要欄冒頭はNG\n  詳細: memory/feedback_title_call_no_40dai.md`);
+      }
+      pass('ガード35: タイトルコール40代なし');
+    }
+
+    // ─── ガード36: 「神」単独使用検出 ───
+    {
+      // 「神」がOKリスト合成語の一部ではなく単独で使われているか検出
+      const okPrefixes = ['神商品', '神コスメ', '神アイテム', '神メニュー', '神フード', '神家電', '神レシピ', '神アプリ', '神サービス', '神対応', '神店', '神店員', '神社', '神様', '神前', '神秘', '神聖', '神経', '神童', '神霊', '神話', '神道', '神技', '神曲', '神回', '神ドラマ', '神映画'];
+      const okSuffixes = ['精神', '失神', '入神', '一神', '多神', '雷神', '風神', '女神'];
+      const fails36 = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i];
+        if (!line.includes('神')) continue;
+        // 「神」全出現位置を取得
+        let pos = 0;
+        let isolated = false;
+        while ((pos = line.indexOf('神', pos)) !== -1) {
+          const before = line.slice(Math.max(0, pos - 1), pos);
+          const after = line.slice(pos + 1, pos + 5);
+          // 接頭辞OK判定
+          let prefixOK = false;
+          for (const ok of okPrefixes) {
+            if (line.slice(pos, pos + ok.length) === ok) { prefixOK = true; break; }
+          }
+          // 接尾辞OK判定
+          let suffixOK = false;
+          for (const ok of okSuffixes) {
+            if (line.slice(Math.max(0, pos - ok.length + 1), pos + 1) === ok) { suffixOK = true; break; }
+          }
+          if (!prefixOK && !suffixOK) {
+            // 「神」の直後が文末・記号・助詞（〜だ/〜だわ等）
+            const isolatedPattern = /^([。、！？\s]|だ|だわ|だね|レベル|っぽい|系|級|か|を|に|が|は|の|と)/;
+            if (isolatedPattern.test(after) || after === '') {
+              isolated = true;
+              break;
+            }
+          }
+          pos++;
+        }
+        if (isolated) {
+          fails36.push(`L${i+1}: ${line.slice(0, 80)}... (単独「神」)`);
+        }
+      }
+      if (fails36.length > 0) {
+        fail('ガード36: 「神」単独使用検出',
+          `${fails36.slice(0, 3).join('\n')}\n→ 「神」単独だと意味不明・必ず「神商品」「神コスメ」等のカテゴリ語と合成\n  詳細: memory/feedback_no_kami_alone.md`);
+      }
+      pass('ガード36: 「神」単独なし');
+    }
+
+    // ─── ガード37: イッチ出現回数 > 1 検出（中盤CTAナレ統合後は1回のみ） ───
+    {
+      // 役名「イッチ」「スレ主」の発言行数をカウント
+      const icchiCount = scriptLines.filter(l => /^(イッチ|スレ主|>>1)\s*[:：]/.test(l.trim())).length;
+      // 視聴者CTA表現がイッチ・スレ民セリフに出てないかチェック
+      const ctaPattern = /(チャンネル登録|高評価|コメントよろしく|見逃さないで|お願いします|よろしく)/;
+      const ctaInSpeech = [];
+      for (let i = 0; i < scriptLines.length; i++) {
+        const line = scriptLines[i];
+        // ナレ役以外でCTA文言検出
+        if (/^(C|ナレ|N|narrator)\s*[:：]/.test(line.trim())) continue;
+        if (ctaPattern.test(line)) {
+          ctaInSpeech.push(`L${i+1}: ${line.slice(0, 60)}...`);
+        }
+      }
+      // 警告レベル: イッチ2回以上 or CTA文言が3個以上スレ民セリフに混入
+      const warnings = [];
+      if (icchiCount > 1) warnings.push(`イッチ出現回数: ${icchiCount}回（推奨1回）`);
+      if (ctaInSpeech.length >= 3) warnings.push(`CTA文言がスレ民セリフに${ctaInSpeech.length}箇所混入（推奨ナレに集約）:\n${ctaInSpeech.slice(0, 3).join('\n')}`);
+      if (warnings.length > 0) {
+        console.warn(`⚠️ ガード37 WARN: ${warnings.join(' / ')}`);
+        console.warn('   詳細: memory/feedback_viewer_cta_must_be_narration.md');
+      } else {
+        pass('ガード37: イッチCTAナレ統合OK');
+      }
+    }
+
+    // ─── ガード38: エンディング登録誘導文言重複検出 ───
+    {
+      // 後半1/3を抽出
+      const endingStart = Math.floor(scriptLines.length * 2 / 3);
+      const endingPart = scriptLines.slice(endingStart).join('\n');
+      const ctaPattern = /(チャンネル登録|高評価|コメントよろしく|コメントしてね|次回もお楽しみ|また見に来て|また来てね|お見逃しなく|フォローよろしく)/g;
+      const ctaMatches = endingPart.match(ctaPattern) || [];
+      if (ctaMatches.length >= 2) {
+        fail('ガード38: エンディング登録誘導重複検出',
+          `エンディング部分でCTA文言${ctaMatches.length}個検出: ${[...new Set(ctaMatches)].join(' / ')}\n→ 1個に統合・「気に入ってくれたらチャンネル登録して、次回も一緒に楽しもう」型\n  詳細: memory/feedback_ending_cta_one_only.md`);
+      }
+      pass('ガード38: エンディング登録誘導1個以下');
+    }
+
+    // ─── ガード39: 冒頭ナレ（L1）と本文1セクション目の類似度高すぎ検出 ───
+    {
+      const introLine = scriptLines[0] || '';
+      // 本文1セクション目（最初の【】見出しの直後10行 or 30行目までを抽出）
+      const bodyStart = scriptLines.findIndex(l => /【.+】/.test(l));
+      const bodySection1 = bodyStart >= 0
+        ? scriptLines.slice(bodyStart, bodyStart + 30).join('\n')
+        : scriptLines.slice(5, 35).join('\n');
+      // 核ワード抽出（3文字以上のカタカナ/漢字熟語）
+      const extractKW = (s) => {
+        const tokens = s.split(/[【】「」『』\s　、。！？・×\+\(\)\[\]｜\/\\,.!?\-:：;]+/u);
+        const result = new Set();
+        for (const t of tokens) {
+          if (t.length < 3) continue;
+          if (/^[\d]+$/.test(t)) continue;
+          result.add(t);
+        }
+        return result;
+      };
+      const introKW = extractKW(introLine);
+      const bodyKW = extractKW(bodySection1);
+      let matchCount = 0;
+      const matched = [];
+      for (const w of introKW) {
+        for (const bw of bodyKW) {
+          if (w === bw || (w.length >= 4 && bw.includes(w)) || (bw.length >= 4 && w.includes(bw))) {
+            matchCount++;
+            matched.push(w);
+            break;
+          }
+        }
+      }
+      // 3個以上一致でFAIL
+      if (matchCount >= 3) {
+        fail('ガード39: 冒頭ナレと本文1セクション目の被り検出',
+          `${matchCount}個一致: [${matched.slice(0, 5).join('/')}]\n冒頭ナレ: ${introLine.slice(0, 80)}\n本文1セクション目: ${bodySection1.slice(0, 100)}...\n→ 冒頭ナレは本文セクション1と被らない別ネタにする（中盤以降のネタで先出し）\n  詳細: memory/feedback_intro_narration_must_be_separate_topic.md`);
+      }
+      pass('ガード39: 冒頭ナレ本文被りなし');
     }
   }
 
