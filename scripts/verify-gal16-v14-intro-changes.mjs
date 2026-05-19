@@ -1,4 +1,4 @@
-// 自ガル16 v14 冒頭5行(L1-L5) スプシ反映検証
+// 自ガル16 v14.3 冒頭6行(L1-L6) スプシ反映検証（azu修正でL1を2行に分割・2文1行違反対応）
 import { google } from 'googleapis'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -29,11 +29,12 @@ const sheets = google.sheets({ version: 'v4', auth })
 const spreadsheetId = '1fmEuE-hm3dHN479LYL31g9VBYi2PncOiQyBwkPJ91Ls'
 
 const checks = [
-  { scriptLine: 1, expected: '業務スーパーやロピア、あなたが今日買い物に行ったそのお店、実は国から警告が出たばかりの商品が並んでいるかもしれません。中には4万個以上回収されたあの野菜も…' },
-  { scriptLine: 2, expected: '絶対買うな店舗別の要注意食品まとめと神商品' },
-  { scriptLine: 3, expected: '今回は6店舗の危険な食品と神商品をまとめました。家族に出す前に、一緒に確認していきましょう' },
-  { scriptLine: 4, expected: '実はロピアでおやつ買った後にあのニュース見て、袋の裏を何度も確認して青ざめたんです。同じ思いしてほしくないから、家族の健康守りたい方は今のうちにチャンネル登録お願いします！' },
-  { scriptLine: 5, expected: 'それではいってみよう！！' },
+  { scriptLine: 1, expected: '業務スーパーやロピア、あなたが今日買い物に行ったそのお店、実は国から警告が出たばかりの商品が並んでいるかもしれません。' },
+  { scriptLine: 2, expected: '中には4万個以上回収されたあの野菜も…そこで今回は' },
+  { scriptLine: 3, expected: '絶対買うな店舗別の要注意食品まとめと神商品' },
+  { scriptLine: 4, expected: '今回は6店舗の危険な食品と神商品をまとめました。家族に出す前に、一緒に確認していきましょう' },
+  { scriptLine: 5, expected: '実はロピアでおやつ買った後にあのニュース見て、袋の裏を何度も確認して青ざめたんです。同じ思いしてほしくないから、家族の健康守りたい方は今のうちにチャンネル登録お願いします！' },
+  { scriptLine: 6, expected: 'それではいってみよう！！' },
 ]
 
 console.log('=== 自ガル16 v14 冒頭5行(L1-L5) スプシ反映検証 ===\n')
