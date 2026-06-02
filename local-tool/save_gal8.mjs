@@ -77,7 +77,8 @@ if (sheetNames.includes('商品リスト') && payload.materials.productList?.len
     spreadsheetId: SCRIPT_SS, range: '商品リスト!D1:E1', valueInputOption: 'USER_ENTERED',
     requestBody: { values: [['Amazonリンク', '楽天リンク']] },
   });
-  await sheets.spreadsheets.values.clear({ spreadsheetId: SCRIPT_SS, range: '商品リスト!A2:E1000' });
+  await sheets.spreadsheets.values.clear({ spreadsheetId: SCRIPT_SS, range: '商品リスト!A2:Z1000' });
+  await sheets.spreadsheets.values.clear({ spreadsheetId: SCRIPT_SS, range: '商品リスト!G1:Z1' });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SCRIPT_SS, range: '商品リスト!A2', valueInputOption: 'USER_ENTERED',
     requestBody: { values: prodRows },
