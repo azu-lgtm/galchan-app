@@ -2244,6 +2244,34 @@ async function main() {
       }
       pass('ガード39: 冒頭ナレ本文被りなし');
     }
+
+    // ─── ガード40: 「今回は」（導入ナレ）がタイトルコールの後に出現検出 ───
+    // azu指示(2026-06-03 自ガル8): 「今回は」は必ずタイトルコールの前。後に来たらNG。
+    // 詳細: memory/feedback_imakaiha_before_title_call.md
+    {
+      // 冒頭領域 = 本文1セクション目（最初の【】見出し）より前。見出しなしなら先頭8行。
+      const bodyStart40 = scriptLines.findIndex(l => /【.+】/.test(l));
+      const introEnd = bodyStart40 >= 0 ? bodyStart40 : Math.min(8, scriptLines.length);
+      // タイトルコール行を冒頭領域内で特定（「絶対買うな」or「まとめと神商品」を含む行）
+      let titleCallIdx = -1;
+      for (let i = 0; i < introEnd; i++) {
+        if (/絶対買うな|まとめと神商品/.test(scriptLines[i])) { titleCallIdx = i; break; }
+      }
+      if (titleCallIdx >= 0) {
+        // タイトルコール行より後（冒頭領域内）に「今回は」が出現したらFAIL
+        const after40 = [];
+        for (let i = titleCallIdx + 1; i < introEnd; i++) {
+          if (scriptLines[i].includes('今回は')) {
+            after40.push(`L${i+1}: ${scriptLines[i].slice(0, 80)}`);
+          }
+        }
+        if (after40.length > 0) {
+          fail('ガード40: 「今回は」がタイトルコールの後に出現',
+            `タイトルコール: L${titleCallIdx+1} ${scriptLines[titleCallIdx].slice(0, 60)}\n後出の「今回は」:\n${after40.slice(0, 3).join('\n')}\n→ 「今回は」（導入ナレ）は必ずタイトルコールの前に置く。タイトルコール直前のつなぎ1回のみにし、後ろのベネフィット行は「今回は」で始めない（例:「○店舗ぶんの危険な〜と神商品をまとめました」）\n  詳細: memory/feedback_imakaiha_before_title_call.md`);
+        }
+      }
+      pass('ガード40: 今回はタイトルコール前順序OK');
+    }
   }
 
   console.log(`\n🟢 PASS: 全チェック通過`);
