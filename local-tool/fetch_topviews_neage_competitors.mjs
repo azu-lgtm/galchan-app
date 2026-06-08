@@ -12,8 +12,10 @@ const QUERIES = [
   '値上げ 高くなった ガルちゃん', '物価高 やめて正解 ガルちゃん', 'ケチるな 買うべき ガルちゃん',
   '物価高 安く買えて良かった ガルちゃん',
 ]
-// 公開日: 直近1年（古くても伸びてるヒットを拾う）
-const since = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString()
+// 🚨リサーチ基準(azu 2026-06-08): 直近3〜6ヶ月 × 最低10万再生以上のみ対象
+// feedback_competitor_research_standard_10man_3to6months.md 準拠
+const MIN_VIEWS = 100000
+const since = new Date(Date.now() - 183 * 24 * 3600 * 1000).toISOString() // 直近6ヶ月
 const search = async (q) => {
   const j = await gj(`${BASE}/search?part=snippet&type=video&q=${encodeURIComponent(q)}&maxResults=25&order=viewCount&publishedAfter=${since}&relevanceLanguage=ja&key=${KEY}`)
   return (j.items || []).map(it => ({ videoId: it.id.videoId, title: it.snippet.title, channelTitle: it.snippet.channelTitle, publishedAt: it.snippet.publishedAt }))
@@ -24,8 +26,12 @@ const hits = [], seen = new Set()
 for (const q of QUERIES) { try { for (const x of await search(q)) if (!seen.has(x.videoId)) { seen.add(x.videoId); hits.push(x) } } catch (e) { console.error(q, e.message) } }
 const st = []
 for (let i = 0; i < hits.length; i += 50) st.push(...await stats(hits.slice(i, i + 50).map(x => x.videoId)))
-const long = st.filter(v => { const m = (v.duration || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); if (!m) return false; return ((+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0))) >= 300 }).sort((a, b) => b.view - a.view)
-console.log('=== 直近1年 値上げ/後悔/神商品 競合 TOP20 (5分以上・再生順) ===')
+const long = st.filter(v => {
+  if (v.view < MIN_VIEWS) return false // 🚨10万再生未満は除外（基準）
+  const m = (v.duration || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); if (!m) return false
+  return ((+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0))) >= 300
+}).sort((a, b) => b.view - a.view)
+console.log('=== 直近6ヶ月 × 10万再生以上 値上げ/後悔/神商品 競合 (再生順) ===')
 for (const v of long.slice(0, 20)) console.log(`[${v.view.toLocaleString()}] ${v.channelTitle} | ${v.publishedAt.slice(0, 10)} | https://youtu.be/${v.videoId} | ${v.title}`)
 await writeFile('C:/Users/meiek/Desktop/ClaudeCode-projects/galchan-app/local-tool/topviews_neage_competitors.json', JSON.stringify({ since, count: long.length, videos: long }, null, 2))
 console.log(`\nSaved: topviews_neage_competitors.json (${long.length})`)
