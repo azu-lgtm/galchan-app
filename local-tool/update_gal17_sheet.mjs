@@ -61,18 +61,21 @@ await sheets.spreadsheets.values.update({
 });
 
 // ── 読み戻し検証 ──
-// タイトルコール: TSV L2 → 台本シート row5（A4起点・L1=row4, L2=row5）
-const titleCheck = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A5:C5' });
-const tRow = (titleCheck.data.values || [])[0] || [];
-console.log('\n📖 読み戻し検証（タイトルコール row5）:');
-console.log('  row5(タイトルコール):', `${tRow[0]||''} | ${tRow[1]||''}`);
+// 冒頭: L1=row4, L2(タイトルコール)=row5, L3a=row6, L3b=row7, L4(責任転嫁)=row8
+const introCheck = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A4:C8' });
+const iv = introCheck.data.values || [];
+console.log('\n📖 読み戻し検証（冒頭 row4-8）:');
+['row4','row5(タイトルコール)','row6(L3a)','row7(L3b)','row8(責任転嫁)'].forEach((label,i)=>{
+  const r = iv[i] || [];
+  console.log(`  ${label}:`, `${r[0]||''} | ${(r[1]||'').slice(0,48)}`);
+});
 
-// 既存ファクト修正3行: TSV L74→row77, L95→row98, L108→row111
-const check = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A74:C112' });
+// 既存ファクト修正3行（L3a/L3b挿入で+1シフト: row78/99/112）
+const check = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A75:C113' });
 const vals = check.data.values || [];
-const at = (sheetRow) => { const r = vals[sheetRow - 74] || []; return `${r[0]||''} | ${(r[1]||'').slice(0,40)}`; };
-console.log('\n📖 読み戻し検証（既存ファクト修正箇所）:');
-console.log('  row77(L74扇風機):', at(77));
-console.log('  row98(L95きのこ):', at(98));
-console.log('  row111(L108マヨ):', at(111));
+const at = (sheetRow) => { const r = vals[sheetRow - 75] || []; return `${r[0]||''} | ${(r[1]||'').slice(0,40)}`; };
+console.log('\n📖 読み戻し検証（既存ファクト修正箇所・+1シフト後）:');
+console.log('  row78(扇風機):', at(78));
+console.log('  row99(きのこ):', at(99));
+console.log('  row112(マヨ):', at(112));
 console.log('\n✅ 台本シート更新完了');
