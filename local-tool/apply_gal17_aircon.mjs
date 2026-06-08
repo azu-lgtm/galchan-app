@@ -59,15 +59,11 @@ console.log('\n🚀 スプシ台本シート再書き込み...');
 await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: '台本!A4:C1000' });
 await sheets.spreadsheets.values.update({ spreadsheetId: SPREADSHEET_ID, range: '台本!A4', valueInputOption: 'USER_ENTERED', requestBody: { values: rows } });
 
-// ── MD台本全文ブロック再生成（SE完全同期）──
-const md = await readFile(MD, 'utf8');
-const blockText = rows.map(([sp, tx, se]) => se ? `${sp}\t${tx}\t${se}` : `${sp}\t${tx}`).join('\n');
-// 「## 台本全文…」見出し直後の ``` … ``` を置換
-const re = /(##\s*台本全文[^\n]*\n+```\n)[\s\S]*?(\n```)/;
-if (!re.test(md)) { console.error('❌ MD台本全文コードブロックが見つからない'); process.exit(1); }
-const newMd = md.replace(re, `$1${blockText}$2`);
-await writeFile(MD, newMd, 'utf8');
-console.log('✅ MD台本全文ブロック再生成完了（SE同期）');
+// ── MD台本全文ブロック ──
+// 2026-06-08: azuがObsidian MDのL4(責任転嫁)行を手動削除済み。azuの手動編集を尊重しMD再生成はスキップ。
+// L4はナレ行=SE非カウントのため削除してもSE位置は不変→MDのSEもズレない。整合性は別途読み戻しで確認。
+console.log('⏭️  MD再生成スキップ（azu手動削除を尊重・L4はSE非カウントで位置不変）');
+void writeFile; void MD;
 
 // ── 読み戻し検証（置き型エアコンブロック）──
 const check = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A4:C300' });
