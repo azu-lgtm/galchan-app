@@ -60,11 +60,18 @@ await sheets.spreadsheets.values.update({
   requestBody: { values: rows },
 });
 
-// ── 読み戻し検証（修正3行: TSV L74→row77, L95→row98, L108→row111）──
+// ── 読み戻し検証 ──
+// タイトルコール: TSV L2 → 台本シート row5（A4起点・L1=row4, L2=row5）
+const titleCheck = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A5:C5' });
+const tRow = (titleCheck.data.values || [])[0] || [];
+console.log('\n📖 読み戻し検証（タイトルコール row5）:');
+console.log('  row5(タイトルコール):', `${tRow[0]||''} | ${tRow[1]||''}`);
+
+// 既存ファクト修正3行: TSV L74→row77, L95→row98, L108→row111
 const check = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '台本!A74:C112' });
 const vals = check.data.values || [];
 const at = (sheetRow) => { const r = vals[sheetRow - 74] || []; return `${r[0]||''} | ${(r[1]||'').slice(0,40)}`; };
-console.log('\n📖 読み戻し検証（修正箇所）:');
+console.log('\n📖 読み戻し検証（既存ファクト修正箇所）:');
 console.log('  row77(L74扇風機):', at(77));
 console.log('  row98(L95きのこ):', at(98));
 console.log('  row111(L108マヨ):', at(111));
