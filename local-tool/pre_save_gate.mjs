@@ -742,6 +742,48 @@ async function main() {
     }
     pass(`ガル台本 重複フレーズ上限チェック（${dupRules.length}パターン全て上限内）`);
 
+    // 10.2b 🆕 同一セリフ（行）重複検出（2026-06-08 azu指示・視聴者コメント「同じセリフそのものが2-3回出る・編集やばい」受け）
+    // 丸ごと同じ or ほぼ同じセリフが複数回出る編集事故を機械ブロック（定型ナレは除外）
+    {
+      const NARR_EXEMPT = [/それではいってみよう/, /このチャンネルでは/, /高評価.*登録/, /最後までご視聴/, /ぜひコメント.*教えて/];
+      const dupBodies = [];
+      for (let i = 0; i < tsvLines.length; i++) {
+        const parts = tsvLines[i].split('\t');
+        const speaker = parts[0];
+        const body = (parts[1] || '').trim();
+        if (speaker === 'タイトル' || body.length < 12) continue;
+        if (NARR_EXEMPT.some(re => re.test(body))) continue;
+        dupBodies.push({ line: i + 1, speaker, body, norm: body.replace(/[、。！？・…\s]/g, '') });
+      }
+      // 完全重複（正規化一致）
+      const firstSeen = new Map();
+      const exactDup = [];
+      for (const b of dupBodies) {
+        if (firstSeen.has(b.norm)) exactDup.push({ a: firstSeen.get(b.norm), b });
+        else firstSeen.set(b.norm, b);
+      }
+      // 近似重複（文字bigram Jaccard >= 0.82・長さ差8字以内）
+      const bigr = (s) => { const set = new Set(); for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2)); return set; };
+      const sim = (a, b) => { const A = bigr(a), B = bigr(b); let inter = 0; for (const x of A) if (B.has(x)) inter++; return inter / ((A.size + B.size - inter) || 1); };
+      const nearDup = [];
+      for (let i = 0; i < dupBodies.length; i++) {
+        for (let j = i + 1; j < dupBodies.length; j++) {
+          if (dupBodies[i].norm === dupBodies[j].norm) continue;
+          if (Math.abs(dupBodies[i].norm.length - dupBodies[j].norm.length) > 8) continue;
+          if (sim(dupBodies[i].norm, dupBodies[j].norm) >= 0.82) nearDup.push({ a: dupBodies[i], b: dupBodies[j] });
+        }
+      }
+      if (exactDup.length > 0) {
+        const s = exactDup.slice(0, 4).map(d => `L${d.a.line}＝L${d.b.line}「${d.b.body.slice(0, 22)}」`).join(' / ');
+        fail(`同一セリフ重複 ${exactDup.length}件（完全一致）`, `${s}\n→ 視聴者が気づく「同じセリフ2-3回」編集事故。片方を別表現に書換 or 削除必須`);
+      }
+      if (nearDup.length > 0) {
+        const s = nearDup.slice(0, 4).map(d => `L${d.a.line}≒L${d.b.line}「${d.b.body.slice(0, 22)}」`).join(' / ');
+        fail(`ほぼ同一セリフ重複 ${nearDup.length}件（類似82%+）`, `${s}\n→ ほぼ同じ言い回しの重複。分散・言い換え必須`);
+      }
+      pass(`ガル台本 同一セリフ重複チェック（完全0件・近似0件）`);
+    }
+
     // 10.2c 同一煽り語3回上限（2026-04-25・競合分析準拠で新規）
     const sensationWords = ['怖い', '危ない', 'ヤバい', '危険', 'ゾッと', '震え', '鳥肌', '泣ける', '油断', '本当に怖'];
     const exceededWords = [];
